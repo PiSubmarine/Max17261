@@ -3,8 +3,11 @@
 #include <cstdint>
 #include <limits>
 
+#if __has_include("PiSubmarine/AmpereHours.h")
+#include "PiSubmarine/AmpereHours.h"
+#endif
 
-namespace PiSubmarine::Max1726
+namespace PiSubmarine::Max17261
 {
 
     struct MicroAmpereHours
@@ -16,6 +19,13 @@ namespace PiSubmarine::Max1726
         {
             return value >> BitShift;
         }
+
+#if __has_include("PiSubmarine/AmpereHours.h")
+        constexpr PiSubmarine::AmpereHours ToAmpereHours() const
+        {
+            return PiSubmarine::AmpereHours{ static_cast<double>(GetMicroAmpereHours()) / 1'000'000.0 };
+        }
+#endif
 
         // Constructor
         constexpr explicit MicroAmpereHours(uint64_t uAh = 0) : value(uAh << BitShift) {}

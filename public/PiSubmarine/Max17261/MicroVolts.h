@@ -3,7 +3,11 @@
 #include <cstdint>
 #include <limits>
 
-namespace PiSubmarine::Max1726
+#if __has_include("PiSubmarine/Volts.h")
+#include "PiSubmarine/Volts.h"
+#endif
+
+namespace PiSubmarine::Max17261
 {
 
     // MicroVolts struct with precise uV handling
@@ -19,6 +23,13 @@ namespace PiSubmarine::Max1726
             uint64_t temp = value >> BitShift;
             return temp;
         }
+
+#if __has_include("PiSubmarine/Volts.h")
+        constexpr PiSubmarine::Volts ToVolts() const
+        {
+            return PiSubmarine::Volts{ static_cast<double>(GetMicroVolts()) / 1'000'000.0 };
+        }
+#endif
 
         constexpr uint32_t GetMilliVolts() const
         {

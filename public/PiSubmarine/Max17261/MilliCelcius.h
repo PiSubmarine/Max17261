@@ -3,6 +3,10 @@
 #include <cstdint>
 #include <limits>
 
+#if __has_include("PiSubmarine/Celsius.h")
+#include "PiSubmarine/Celsius.h"
+#endif
+
 struct MilliCelsius
 {
     constexpr static size_t BitShift = 5;
@@ -14,6 +18,13 @@ struct MilliCelsius
     {
         return value >> BitShift;
     }
+
+#if __has_include("PiSubmarine/Celsius.h")
+    constexpr PiSubmarine::Celsius ToCelsius() const
+    {
+        return PiSubmarine::Celsius{ static_cast<double>(GetMilliCelsius()) / 1000.0 };
+    }
+#endif
 
     // Convert from raw device value (uint16_t with 2's complement) to MilliCelsius
     static constexpr MilliCelsius FromRaw(int16_t raw)

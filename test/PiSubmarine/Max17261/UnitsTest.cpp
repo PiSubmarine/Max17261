@@ -1,12 +1,12 @@
 #include <gtest/gtest.h>
 
-#include "PiSubmarine/Max1726/MicroAmpereHours.h"
-#include "PiSubmarine/Max1726/MicroAmperes.h"
-#include "PiSubmarine/Max1726/MicroVolts.h"
-#include "PiSubmarine/Max1726/MilliCelcius.h"
+#include "PiSubmarine/Max17261/MicroAmpereHours.h"
+#include "PiSubmarine/Max17261/MicroAmperes.h"
+#include "PiSubmarine/Max17261/MicroVolts.h"
+#include "PiSubmarine/Max17261/MilliCelcius.h"
 #include "PiSubmarine/RegUtils.h"
 
-namespace PiSubmarine::Max1726
+namespace PiSubmarine::Max17261
 {
     // ---------------------
     // MicroAmperes Tests

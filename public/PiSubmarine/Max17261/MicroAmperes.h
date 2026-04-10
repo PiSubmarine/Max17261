@@ -3,7 +3,11 @@
 #include <cstdint>
 #include <limits>
 
-namespace PiSubmarine::Max1726
+#if __has_include("PiSubmarine/Amperes.h")
+#include "PiSubmarine/Amperes.h"
+#endif
+
+namespace PiSubmarine::Max17261
 {
     struct MicroAmperes
     {
@@ -17,6 +21,13 @@ namespace PiSubmarine::Max1726
         {
             return value >> BitShift;
         }
+
+#if __has_include("PiSubmarine/Amperes.h")
+        constexpr PiSubmarine::Amperes ToAmperes() const
+        {
+            return PiSubmarine::Amperes{ static_cast<double>(GetMicroAmperes()) / 1'000'000.0 };
+        }
+#endif
 
         static constexpr MicroAmperes FromRaw(int16_t raw)
         {
