@@ -4,6 +4,23 @@ namespace PiSubmarine::Max17261
 {
     namespace
     {
+        constexpr uint16_t PercentRegisterFullScale = 100u * 256u;
+
+        constexpr NormalizedIntFactor DecodePercentRegister(uint16_t raw)
+        {
+            constexpr uint64_t maxFactorRaw = NormalizedIntFactor::GetMaxRawValue();
+            const uint64_t scaled = (static_cast<uint64_t>(raw) * maxFactorRaw + (PercentRegisterFullScale / 2u)) /
+                PercentRegisterFullScale;
+            return NormalizedIntFactor{scaled};
+        }
+
+        constexpr uint16_t EncodePercentRegister(NormalizedIntFactor factor)
+        {
+            constexpr uint64_t maxFactorRaw = NormalizedIntFactor::GetMaxRawValue();
+            const uint64_t raw = (factor.Get() * PercentRegisterFullScale + (maxFactorRaw / 2u)) / maxFactorRaw;
+            return static_cast<uint16_t>(raw);
+        }
+
         constexpr AlertThresholdRaw8 DecodeAlertThreshold(uint16_t raw)
         {
             return AlertThresholdRaw8{
@@ -387,9 +404,14 @@ namespace PiSubmarine::Max17261
         return WriteRegister(RegOffset::FullCapNom, value);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetRemainingStateOfChargeRaw() const
+    std::expected<NormalizedIntFactor, DeviceError> Device::GetRemainingStateOfCharge() const
     {
-        return ReadRegister<uint16_t>(RegOffset::RepSOC);
+        auto valueResult = ReadRegister<uint16_t>(RegOffset::RepSOC);
+        if (!valueResult.has_value())
+        {
+            return std::unexpected(valueResult.error());
+        }
+        return DecodePercentRegister(valueResult.value());
     }
 
     std::expected<MicroAmperes, DeviceError> Device::GetInstantCurrent() const
@@ -522,14 +544,16 @@ namespace PiSubmarine::Max17261
         return WriteRegister<int16_t>(RegOffset::AtRate, value.ToRaw());
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetAgeEstimateRaw() const
+    std::expected<NormalizedIntFactor, DeviceError> Device::GetAgeEstimate() const
     {
-        return ReadRegister<uint16_t>(RegOffset::Age);
+        auto valueResult = ReadRegister<uint16_t>(RegOffset::Age);
+        if (!valueResult.has_value()) return std::unexpected(valueResult.error());
+        return DecodePercentRegister(valueResult.value());
     }
 
-    DeviceError Device::SetAgeEstimateRaw(uint16_t value)
+    DeviceError Device::SetAgeEstimate(NormalizedIntFactor value)
     {
-        return WriteRegister<uint16_t>(RegOffset::Age, value);
+        return WriteRegister<uint16_t>(RegOffset::Age, EncodePercentRegister(value));
     }
 
     std::expected<MilliCelsius, DeviceError> Device::GetBatteryTemperature() const
@@ -568,24 +592,28 @@ namespace PiSubmarine::Max17261
         return WriteRegister<uint16_t>(RegOffset::QResidual, value.Raw);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetMixedSocRaw() const
+    std::expected<NormalizedIntFactor, DeviceError> Device::GetMixedSoc() const
     {
-        return ReadRegister<uint16_t>(RegOffset::MixSOC);
+        auto valueResult = ReadRegister<uint16_t>(RegOffset::MixSOC);
+        if (!valueResult.has_value()) return std::unexpected(valueResult.error());
+        return DecodePercentRegister(valueResult.value());
     }
 
-    DeviceError Device::SetMixedSocRaw(uint16_t value)
+    DeviceError Device::SetMixedSoc(NormalizedIntFactor value)
     {
-        return WriteRegister<uint16_t>(RegOffset::MixSOC, value);
+        return WriteRegister<uint16_t>(RegOffset::MixSOC, EncodePercentRegister(value));
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetFilteredSocRaw() const
+    std::expected<NormalizedIntFactor, DeviceError> Device::GetFilteredSoc() const
     {
-        return ReadRegister<uint16_t>(RegOffset::AvSOC);
+        auto valueResult = ReadRegister<uint16_t>(RegOffset::AvSOC);
+        if (!valueResult.has_value()) return std::unexpected(valueResult.error());
+        return DecodePercentRegister(valueResult.value());
     }
 
-    DeviceError Device::SetFilteredSocRaw(uint16_t value)
+    DeviceError Device::SetFilteredSoc(NormalizedIntFactor value)
     {
-        return WriteRegister<uint16_t>(RegOffset::AvSOC, value);
+        return WriteRegister<uint16_t>(RegOffset::AvSOC, EncodePercentRegister(value));
     }
 
     std::expected<MicroAmpereHours, DeviceError> Device::GetMixedCapacityEstimate() const
@@ -612,14 +640,16 @@ namespace PiSubmarine::Max17261
         return WriteRegister<uint16_t>(RegOffset::QRTable00, value.Raw);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetFullSocThresholdRaw() const
+    std::expected<NormalizedIntFactor, DeviceError> Device::GetFullSocThreshold() const
     {
-        return ReadRegister<uint16_t>(RegOffset::FullSocThr);
+        auto valueResult = ReadRegister<uint16_t>(RegOffset::FullSocThr);
+        if (!valueResult.has_value()) return std::unexpected(valueResult.error());
+        return DecodePercentRegister(valueResult.value());
     }
 
-    DeviceError Device::SetFullSocThresholdRaw(uint16_t value)
+    DeviceError Device::SetFullSocThreshold(NormalizedIntFactor value)
     {
-        return WriteRegister<uint16_t>(RegOffset::FullSocThr, value);
+        return WriteRegister<uint16_t>(RegOffset::FullSocThr, EncodePercentRegister(value));
     }
 
     std::expected<uint16_t, DeviceError> Device::GetCellResistanceRaw() const
@@ -1235,14 +1265,16 @@ namespace PiSubmarine::Max17261
         return WriteRegister<uint16_t>(RegOffset::AtTTE, value);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetAtRateAverageSocRaw() const
+    std::expected<NormalizedIntFactor, DeviceError> Device::GetAtRateAverageSoc() const
     {
-        return ReadRegister<uint16_t>(RegOffset::AtAvSOC);
+        auto valueResult = ReadRegister<uint16_t>(RegOffset::AtAvSOC);
+        if (!valueResult.has_value()) return std::unexpected(valueResult.error());
+        return DecodePercentRegister(valueResult.value());
     }
 
-    DeviceError Device::SetAtRateAverageSocRaw(uint16_t value)
+    DeviceError Device::SetAtRateAverageSoc(NormalizedIntFactor value)
     {
-        return WriteRegister<uint16_t>(RegOffset::AtAvSOC, value);
+        return WriteRegister<uint16_t>(RegOffset::AtAvSOC, EncodePercentRegister(value));
     }
 
     std::expected<uint16_t, DeviceError> Device::GetAtRateAverageCapacityRaw() const

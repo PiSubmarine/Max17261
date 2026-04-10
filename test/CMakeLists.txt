@@ -15,7 +15,7 @@ find_package(GTest)
 
 add_executable(${PISUBMARINE_MODULE_NAME}.Test ${${PISUBMARINE_MODULE_NAME}.Test.Sources})
 PiSubmarineInitTarget(${PISUBMARINE_MODULE_NAME}.Test)
-target_link_libraries(${PISUBMARINE_MODULE_NAME}.Test PRIVATE PiSubmarine.Max1726)
+target_link_libraries(${PISUBMARINE_MODULE_NAME}.Test PRIVATE PiSubmarine.Max17261)
 target_link_libraries(${PISUBMARINE_MODULE_NAME}.Test PRIVATE PiSubmarine.I2C.Api.Mock)
 
 target_link_libraries(${PISUBMARINE_MODULE_NAME}.Test PRIVATE spdlog::spdlog)

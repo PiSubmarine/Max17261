@@ -5,6 +5,7 @@
 #include "PiSubmarine/Max17261/MicroAmperes.h"
 #include "PiSubmarine/Max17261/MicroVolts.h"
 #include "PiSubmarine/Max17261/MilliCelcius.h"
+#include "PiSubmarine/NormalizedIntFraction.h"
 #include "PiSubmarine/I2C/Api/IDriver.h"
 #include <cstddef>
 #include <cstdint>
@@ -15,6 +16,8 @@
 
 namespace PiSubmarine::Max17261
 {
+	using NormalizedIntFactor = PiSubmarine::NormalizedIntFraction<16>;
+
 	using WaitFunc = std::function<void(std::chrono::milliseconds)>;
 
 	enum class RegOffset : uint8_t
@@ -289,14 +292,14 @@ namespace PiSubmarine::Max17261
 		constexpr static uint8_t Address = 0x36;
 
 		/// <summary>
-		/// Constructs a MAX17261 device wrapper using the provided blocking I2C driver.
+		/// Constructs a MAX172611 device wrapper using the provided blocking I2C driver.
 		/// </summary>
 		Device(I2C::Api::IDriver& driver);
 
 		/// <summary>
-		/// Initializes MAX1726 in blocking mode. Must be called on every power cycle.
+		/// Initializes MAX17261 in blocking mode. Must be called on every power cycle.
 		/// </summary>
-		/// <returns>True if initialization was successfull.</returns>
+		/// <returns>True if initialization was successful.</returns>
 		bool Init(const WaitFunc& waitFunc, MicroAmpereHours designCapacity, MicroAmperes terminationCurrent, MicroVolts emptyVoltage, bool forceReset = false);
 
 		/// <summary>
@@ -473,9 +476,10 @@ namespace PiSubmarine::Max17261
 		DeviceError SetNominalFullCapacityEstimate(MicroAmpereHours cap);
 
 		/// <summary>
-		/// Reads RepSOC register (06h) in raw register units.
+		/// Reads RepSOC register (06h) as normalized state-of-charge factor.
+		/// Datasheet LSB is 1/256% (0x6400 = 100%).
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint16_t, DeviceError> GetRemainingStateOfChargeRaw() const;
+		[[nodiscard]] [[nodiscard]] std::expected<NormalizedIntFactor, DeviceError> GetRemainingStateOfCharge() const;
 
 		/// <summary>
 		/// Reads Current register (0Ah), instantaneous pack current.
@@ -575,10 +579,10 @@ namespace PiSubmarine::Max17261
 		/// <summary>Writes AtRate register (04h), theoretical load current input.</summary>
 		DeviceError SetTheoreticalLoadCurrent(MicroAmperes value);
 
-		/// <summary>Reads Age register (07h) battery aging estimate in raw register format.</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint16_t, DeviceError> GetAgeEstimateRaw() const;
-		/// <summary>Writes Age register (07h) battery aging estimate in raw register format.</summary>
-		DeviceError SetAgeEstimateRaw(uint16_t value);
+		/// <summary>Reads Age register (07h) as normalized age/capacity ratio factor (Age%).</summary>
+		[[nodiscard]] [[nodiscard]] std::expected<NormalizedIntFactor, DeviceError> GetAgeEstimate() const;
+		/// <summary>Writes Age register (07h) as normalized age/capacity ratio factor (Age%).</summary>
+		DeviceError SetAgeEstimate(NormalizedIntFactor value);
 		/// <summary>Reads Temp register (08h) measured battery temperature.</summary>
 		[[nodiscard]] [[nodiscard]] std::expected<MilliCelsius, DeviceError> GetBatteryTemperature() const;
 		/// <summary>Writes Temp register (08h) measured battery temperature register value.</summary>
@@ -591,14 +595,14 @@ namespace PiSubmarine::Max17261
 		[[nodiscard]] [[nodiscard]] std::expected<CapacityAccumulator, DeviceError> GetResidualCapacityTerm() const;
 		/// <summary>Writes QResidual register (0Ch). Internal register.</summary>
 		DeviceError SetResidualCapacityTerm(CapacityAccumulator value);
-		/// <summary>Reads MixSOC register (0Dh), mixed SOC estimate in raw format.</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint16_t, DeviceError> GetMixedSocRaw() const;
-		/// <summary>Writes MixSOC register (0Dh), mixed SOC estimate in raw format.</summary>
-		DeviceError SetMixedSocRaw(uint16_t value);
-		/// <summary>Reads AvSOC register (0Eh), filtered SOC estimate in raw format.</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint16_t, DeviceError> GetFilteredSocRaw() const;
-		/// <summary>Writes AvSOC register (0Eh), filtered SOC estimate in raw format.</summary>
-		DeviceError SetFilteredSocRaw(uint16_t value);
+		/// <summary>Reads MixSOC register (0Dh), mixed SOC estimate as normalized factor (1/256% LSB).</summary>
+		[[nodiscard]] [[nodiscard]] std::expected<NormalizedIntFactor, DeviceError> GetMixedSoc() const;
+		/// <summary>Writes MixSOC register (0Dh), mixed SOC estimate as normalized factor (1/256% LSB).</summary>
+		DeviceError SetMixedSoc(NormalizedIntFactor value);
+		/// <summary>Reads AvSOC register (0Eh), filtered SOC estimate as normalized factor (1/256% LSB).</summary>
+		[[nodiscard]] [[nodiscard]] std::expected<NormalizedIntFactor, DeviceError> GetFilteredSoc() const;
+		/// <summary>Writes AvSOC register (0Eh), filtered SOC estimate as normalized factor (1/256% LSB).</summary>
+		DeviceError SetFilteredSoc(NormalizedIntFactor value);
 		/// <summary>Reads MixCap register (0Fh), mixed capacity estimate.</summary>
 		[[nodiscard]] [[nodiscard]] std::expected<MicroAmpereHours, DeviceError> GetMixedCapacityEstimate() const;
 		/// <summary>Writes MixCap register (0Fh), mixed capacity estimate.</summary>
@@ -607,10 +611,10 @@ namespace PiSubmarine::Max17261
 		[[nodiscard]] [[nodiscard]] std::expected<ModelQrParameter, DeviceError> GetModelQrTable00() const;
 		/// <summary>Writes QRTable00 register (12h). Internal model register.</summary>
 		DeviceError SetModelQrTable00(ModelQrParameter value);
-		/// <summary>Reads FullSocThr register (13h) full SOC threshold in raw format.</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint16_t, DeviceError> GetFullSocThresholdRaw() const;
-		/// <summary>Writes FullSocThr register (13h) full SOC threshold in raw format.</summary>
-		DeviceError SetFullSocThresholdRaw(uint16_t value);
+		/// <summary>Reads FullSocThr register (13h) full SOC threshold as normalized factor (1/256% LSB).</summary>
+		[[nodiscard]] [[nodiscard]] std::expected<NormalizedIntFactor, DeviceError> GetFullSocThreshold() const;
+		/// <summary>Writes FullSocThr register (13h) full SOC threshold as normalized factor (1/256% LSB).</summary>
+		DeviceError SetFullSocThreshold(NormalizedIntFactor value);
 		/// <summary>Reads RCell register (14h), internal resistance estimate in raw format.</summary>
 		[[nodiscard]] [[nodiscard]] std::expected<uint16_t, DeviceError> GetCellResistanceRaw() const;
 		/// <summary>Writes RCell register (14h), internal resistance estimate in raw format.</summary>
@@ -833,10 +837,10 @@ namespace PiSubmarine::Max17261
 		[[nodiscard]] std::expected<uint16_t, DeviceError> GetAtRateTimeToEmptyRaw() const;
 		/// <summary>Writes AtTTE register (DDh), AtRate time-to-empty prediction raw.</summary>
 		DeviceError SetAtRateTimeToEmptyRaw(uint16_t value);
-		/// <summary>Reads AtAvSOC register (DEh), AtRate average SOC prediction raw.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetAtRateAverageSocRaw() const;
-		/// <summary>Writes AtAvSOC register (DEh), AtRate average SOC prediction raw.</summary>
-		DeviceError SetAtRateAverageSocRaw(uint16_t value);
+		/// <summary>Reads AtAvSOC register (DEh), AtRate average SOC prediction as normalized factor (1/256% LSB).</summary>
+		[[nodiscard]] std::expected<NormalizedIntFactor, DeviceError> GetAtRateAverageSoc() const;
+		/// <summary>Writes AtAvSOC register (DEh), AtRate average SOC prediction as normalized factor (1/256% LSB).</summary>
+		DeviceError SetAtRateAverageSoc(NormalizedIntFactor value);
 		/// <summary>Reads AtAvCap register (DFh), AtRate average capacity prediction raw.</summary>
 		[[nodiscard]] std::expected<uint16_t, DeviceError> GetAtRateAverageCapacityRaw() const;
 		/// <summary>Writes AtAvCap register (DFh), AtRate average capacity prediction raw.</summary>
