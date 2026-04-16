@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <span>
+#include "PiSubmarine/Error/Api/MakeError.h"
 #include "PiSubmarine/Max17261/Device.h"
 #include "PiSubmarine/I2C/Api/IDriverMock.h"
 
@@ -8,34 +10,35 @@ namespace PiSubmarine::Max17261
 	using ::testing::_;
 	using ::testing::Invoke;
 	using ::testing::Return;
+	using ErrorCondition = PiSubmarine::Error::Api::ErrorCondition;
 
 	TEST(DeviceTest, SetsAndGetsVoltageAlertThresholdRaw)
 	{
 		PiSubmarine::I2C::Api::IDriverMock driver;
 		Device device(driver);
 
-		EXPECT_CALL(driver, Write(Device::Address, _, 3))
-			.WillOnce(Invoke([](uint8_t, uint8_t* tx, std::size_t len)
+		EXPECT_CALL(driver, Write(Device::Address, _))
+			.WillOnce(Invoke([](uint8_t, std::span<const uint8_t> tx)
 			{
-				EXPECT_EQ(len, 3u);
+				EXPECT_EQ(tx.size(), 3u);
 				EXPECT_EQ(tx[0], static_cast<uint8_t>(RegOffset::VAlrtTh));
 				EXPECT_EQ(tx[1], 0x55);
 				EXPECT_EQ(tx[2], 0xAA);
-				return true;
+				return PiSubmarine::Error::Api::Result<void>{};
 			}));
 
 		auto setResult = device.SetVoltageAlertThresholdRaw({ .Maximum = 0xAA, .Minimum = 0x55 });
-		EXPECT_EQ(setResult, DeviceError::None);
+		EXPECT_TRUE(setResult.has_value());
 
-		EXPECT_CALL(driver, WriteRead(Device::Address, _, 1, _, 2))
-			.WillOnce(Invoke([](uint8_t, uint8_t* tx, std::size_t txLen, uint8_t* rx, std::size_t rxLen)
+		EXPECT_CALL(driver, WriteRead(Device::Address, _, _))
+			.WillOnce(Invoke([](uint8_t, std::span<const uint8_t> tx, std::span<uint8_t> rx)
 			{
-				EXPECT_EQ(txLen, 1u);
+				EXPECT_EQ(tx.size(), 1u);
 				EXPECT_EQ(tx[0], static_cast<uint8_t>(RegOffset::VAlrtTh));
-				EXPECT_EQ(rxLen, 2u);
+				EXPECT_EQ(rx.size(), 2u);
 				rx[0] = 0x55;
 				rx[1] = 0xAA;
-				return true;
+				return PiSubmarine::Error::Api::Result<void>{};
 			}));
 
 		auto getResult = device.GetVoltageAlertThresholdRaw();
@@ -49,13 +52,13 @@ namespace PiSubmarine::Max17261
 		PiSubmarine::I2C::Api::IDriverMock driver;
 		Device device(driver);
 
-		EXPECT_CALL(driver, WriteRead(Device::Address, _, 1, _, 2))
-			.WillOnce(Invoke([](uint8_t, uint8_t* tx, std::size_t, uint8_t* rx, std::size_t)
+		EXPECT_CALL(driver, WriteRead(Device::Address, _, _))
+			.WillOnce(Invoke([](uint8_t, std::span<const uint8_t> tx, std::span<uint8_t> rx)
 			{
 				EXPECT_EQ(tx[0], static_cast<uint8_t>(RegOffset::VCell));
 				rx[0] = 0x10;
 				rx[1] = 0x27;
-				return true;
+				return PiSubmarine::Error::Api::Result<void>{};
 			}));
 
 		auto voltageResult = device.GetInstantVoltage();
@@ -68,10 +71,12 @@ namespace PiSubmarine::Max17261
 		PiSubmarine::I2C::Api::IDriverMock driver;
 		Device device(driver);
 
-		EXPECT_CALL(driver, Write(Device::Address, _, 3)).WillOnce(Return(false));
+		EXPECT_CALL(driver, Write(Device::Address, _)).WillOnce(Return(std::unexpected(
+			PiSubmarine::Error::Api::MakeError(ErrorCondition::CommunicationError))));
 
 		auto result = device.SetCycleCount(7);
-		EXPECT_EQ(result, DeviceError::WriteFailed);
+		ASSERT_FALSE(result.has_value());
+		EXPECT_EQ(result.error().Condition, ErrorCondition::CommunicationError);
 	}
 
 	TEST(DeviceTest, PropagatesWriteReadError)
@@ -79,11 +84,12 @@ namespace PiSubmarine::Max17261
 		PiSubmarine::I2C::Api::IDriverMock driver;
 		Device device(driver);
 
-		EXPECT_CALL(driver, WriteRead(Device::Address, _, 1, _, 2)).WillOnce(Return(false));
+		EXPECT_CALL(driver, WriteRead(Device::Address, _, _)).WillOnce(Return(std::unexpected(
+			PiSubmarine::Error::Api::MakeError(ErrorCondition::CommunicationError))));
 
 		auto result = device.GetCycleCount();
 		ASSERT_FALSE(result.has_value());
-		EXPECT_EQ(result.error(), DeviceError::WriteReadFailed);
+		EXPECT_EQ(result.error().Condition, ErrorCondition::CommunicationError);
 	}
 
 	TEST(DeviceTest, AlgorithmLearningParametersSerializationRoundtrip)
@@ -137,10 +143,10 @@ namespace PiSubmarine::Max17261
 		p.CapacityDeltaAccumulator.Raw = 11;
 		p.PowerDeltaAccumulator.Raw = 12;
 
-		EXPECT_CALL(driver, Write(Device::Address, _, 3)).Times(12).WillRepeatedly(Return(true));
+		EXPECT_CALL(driver, Write(Device::Address, _)).Times(12).WillRepeatedly(Return(PiSubmarine::Error::Api::Result<void>{}));
 
 		auto result = device.SetAlgorithmLearningParameters(p);
-		EXPECT_EQ(result, DeviceError::None);
+		EXPECT_TRUE(result.has_value());
 	}
 
 	TEST(DeviceTest, AlgorithmLearningParametersGetReadsAllRegisters)
@@ -148,14 +154,14 @@ namespace PiSubmarine::Max17261
 		PiSubmarine::I2C::Api::IDriverMock driver;
 		Device device(driver);
 
-		EXPECT_CALL(driver, WriteRead(Device::Address, _, 1, _, 2))
+		EXPECT_CALL(driver, WriteRead(Device::Address, _, _))
 			.Times(12)
-			.WillRepeatedly(Invoke([](uint8_t, uint8_t* tx, std::size_t, uint8_t* rx, std::size_t)
+			.WillRepeatedly(Invoke([](uint8_t, std::span<const uint8_t> tx, std::span<uint8_t> rx)
 			{
 				const uint16_t value = static_cast<uint16_t>(tx[0]) * 3u;
 				rx[0] = static_cast<uint8_t>(value & 0xFF);
 				rx[1] = static_cast<uint8_t>((value >> 8) & 0xFF);
-				return true;
+				return PiSubmarine::Error::Api::Result<void>{};
 			}));
 
 		auto result = device.GetAlgorithmLearningParameters();
@@ -164,3 +170,4 @@ namespace PiSubmarine::Max17261
 		EXPECT_EQ(result->PowerDeltaAccumulator.Raw, static_cast<uint16_t>(static_cast<uint8_t>(RegOffset::dPAcc) * 3u));
 	}
 }
+

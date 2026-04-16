@@ -6,10 +6,10 @@
 #include "PiSubmarine/Max17261/MicroVolts.h"
 #include "PiSubmarine/Max17261/MilliCelcius.h"
 #include "PiSubmarine/NormalizedIntFraction.h"
+#include "PiSubmarine/Error/Api/Result.h"
 #include "PiSubmarine/I2C/Api/IDriver.h"
 #include <cstddef>
 #include <cstdint>
-#include <expected>
 #include <functional>
 #include <chrono>
 #include <array>
@@ -19,6 +19,9 @@ namespace PiSubmarine::Max17261
 	using NormalizedIntFactor = PiSubmarine::NormalizedIntFraction<16>;
 
 	using WaitFunc = std::function<void(std::chrono::milliseconds)>;
+
+	template<typename T>
+	using Result = PiSubmarine::Error::Api::Result<T>;
 
 	enum class RegOffset : uint8_t
 	{
@@ -176,12 +179,6 @@ namespace PiSubmarine::Max17261
 		TSel = (1 << 15)
 	};
 
-	enum class DeviceError : uint8_t
-	{
-		None = 0,
-		WriteFailed,
-		WriteReadFailed
-	};
 
 	struct AlertThresholdRaw8
 	{
@@ -299,585 +296,585 @@ namespace PiSubmarine::Max17261
 		/// <summary>
 		/// Initializes MAX17261 in blocking mode. Must be called on every power cycle.
 		/// </summary>
-		/// <returns>True if initialization was successful.</returns>
-		bool Init(const WaitFunc& waitFunc, MicroAmpereHours designCapacity, MicroAmperes terminationCurrent, MicroVolts emptyVoltage, bool forceReset = false);
+		/// <returns>An empty result on success, or an error if initialization fails.</returns>
+		Result<void> Init(const WaitFunc& waitFunc, MicroAmpereHours designCapacity, MicroAmperes terminationCurrent, MicroVolts emptyVoltage, bool forceReset = false);
 
 		/// <summary>
 		/// Reads Status register (00h) alert/status flags.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<Status, DeviceError> GetAlertStatus() const;
+		[[nodiscard]] Result<Status> GetAlertStatus() const;
 		/// <summary>
 		/// Writes Status register (00h), typically to clear sticky alert bits.
 		/// </summary>
-		DeviceError SetAlertStatus(Status value);
+		Result<void> SetAlertStatus(Status value);
 		/// <summary>
 		/// Reads FuelGaugeStatus register (3Dh) fuel-gauge algorithm status.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<FuelGaugeStatus, DeviceError> GetFuelGaugeStatus() const;
+		[[nodiscard]] Result<FuelGaugeStatus> GetFuelGaugeStatus() const;
 		/// <summary>
 		/// Reads HibCfg.HibScalar (BAh[2:0]) hibernate task period scale.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint8_t, DeviceError> GetHibernateTaskPeriodScale() const;
+		[[nodiscard]] Result<uint8_t> GetHibernateTaskPeriodScale() const;
 
 		/// <summary>
 		/// Sets HibCfg.HibScalar (BAh[2:0]).
 		/// Task period is approximately 351ms * 2^HibScalar.
 		/// </summary>
-		DeviceError SetHibernateTaskPeriodScale(uint8_t value);
+		Result<void> SetHibernateTaskPeriodScale(uint8_t value);
 
 		/// <summary>
 		/// Reads HibCfg.HibExitTime (BAh[4:3]) hibernate exit delay field.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint8_t, DeviceError> GetHibernateExitDelay() const;
+		[[nodiscard]] Result<uint8_t> GetHibernateExitDelay() const;
 
 		/// <summary>
 		/// Sets HibCfg.HibExitTime (BAh[4:3]).
 		/// Exit delay is approximately (HibExitTime + 1) * 702ms * 2^HibScalar.
 		/// </summary>
-		DeviceError SetHibernateExitDelay(uint8_t value);
+		Result<void> SetHibernateExitDelay(uint8_t value);
 
 		/// <summary>
 		/// Reads HibCfg.HibThreshold (BAh[11:8]) current threshold for hibernate logic.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint8_t, DeviceError> GetHibernateCurrentThreshold() const;
+		[[nodiscard]] Result<uint8_t> GetHibernateCurrentThreshold() const;
 
 		/// <summary>
 		/// Sets HibCfg.HibThreshold (BAh[11:8]) current threshold for hibernate logic.
 		/// </summary>
-		DeviceError SetHibernateCurrentThreshold(uint8_t value);
+		Result<void> SetHibernateCurrentThreshold(uint8_t value);
 
 		/// <summary>
 		/// Reads HibCfg.HibEnterTime (BAh[14:12]) hibernate entry delay.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint8_t, DeviceError> GetHibernateEnterDelay() const;
+		[[nodiscard]] Result<uint8_t> GetHibernateEnterDelay() const;
 
 		/// <summary>
 		/// Sets HibCfg.HibEnterTime (BAh[14:12]) hibernate entry delay.
 		/// </summary>
-		DeviceError SetHibernateEnterDelay(uint8_t value);
+		Result<void> SetHibernateEnterDelay(uint8_t value);
 
 		/// <summary>
 		/// Reads HibCfg.EnHib (BAh[15]) hibernate enable state.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<bool, DeviceError> IsHibernateModeEnabled() const;
+		[[nodiscard]] Result<bool> IsHibernateModeEnabled() const;
 
 		/// <summary>
 		/// Sets HibCfg.EnHib (BAh[15]) hibernate enable state.
 		/// </summary>
-		DeviceError SetHibernateModeEnabled(bool value);
+		Result<void> SetHibernateModeEnabled(bool value);
 
 		/// <summary>
 		/// Writes Command register (60h) with control command (Clear/Reset/SoftWakeup).
 		/// </summary>
-		DeviceError ExecuteCommand(Command command);
+		Result<void> ExecuteCommand(Command command);
 
 		/// <summary>
 		/// Reads Command register (60h).
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<Command, DeviceError> GetCommandRegisterValue() const;
+		[[nodiscard]] Result<Command> GetCommandRegisterValue() const;
 
 		/// <summary>
 		/// Assumes 0.010 Ohm sense resistor.
 		/// </summary>
 		/// Writes DesignCap register (18h), design capacity.
-		DeviceError SetDesignCapacity(MicroAmpereHours valueMah);
+		Result<void> SetDesignCapacity(MicroAmpereHours valueMah);
 
 		/// <summary>
 		/// Assumes 0.010 Ohm sense resistor.
 		/// </summary>
 		/// Reads DesignCap register (18h), design capacity.
-		[[nodiscard]] [[nodiscard]] std::expected<MicroAmpereHours, DeviceError> GetDesignCapacity() const;
+		[[nodiscard]] Result<MicroAmpereHours> GetDesignCapacity() const;
 
 		/// <summary>
 		/// Assumes 0.010 Ohm sense resistor.
 		/// </summary>
 		/// Writes IChgTerm register (1Eh), charge termination current.
-		DeviceError SetChargeTerminationCurrent(MicroAmperes valueMa);
+		Result<void> SetChargeTerminationCurrent(MicroAmperes valueMa);
 
 		/// <summary>
 		/// Assumes 0.010 Ohm sense resistor.
 		/// </summary>
 		/// Reads IChgTerm register (1Eh), charge termination current.
-		[[nodiscard]] [[nodiscard]] std::expected<MicroAmperes, DeviceError> GetChargeTerminationCurrent() const;
+		[[nodiscard]] Result<MicroAmperes> GetChargeTerminationCurrent() const;
 
 		/// <summary>
 		/// Writes VEmpty.VEmpty (3Ah[15:7]) battery empty voltage threshold.
 		/// </summary>
-		DeviceError SetBatteryEmptyVoltage(MicroVolts valueUv);
+		Result<void> SetBatteryEmptyVoltage(MicroVolts valueUv);
 
 		/// <summary>
 		/// Reads VEmpty.VEmpty (3Ah[15:7]) battery empty voltage threshold.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<MicroVolts, DeviceError> GetBatteryEmptyVoltage() const;
+		[[nodiscard]] Result<MicroVolts> GetBatteryEmptyVoltage() const;
 
 		/// <summary>
 		/// Writes VEmpty.VRecovery (3Ah[6:0]) battery recovery voltage threshold.
 		/// </summary>
-		DeviceError SetBatteryRecoveryVoltage(MicroVolts valueUv);
+		Result<void> SetBatteryRecoveryVoltage(MicroVolts valueUv);
 
 		/// <summary>
 		/// Reads VEmpty.VRecovery (3Ah[6:0]) battery recovery voltage threshold.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<MicroVolts, DeviceError> GetBatteryRecoveryVoltage() const;
+		[[nodiscard]] Result<MicroVolts> GetBatteryRecoveryVoltage() const;
 
 		/// <summary>
 		/// Reads ModelCfg.ModelID (DBh[7:4]) battery chemistry model selection.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<ModelId, DeviceError> GetBatteryChemistryModel() const;
+		[[nodiscard]] Result<ModelId> GetBatteryChemistryModel() const;
 
 		/// <summary>
 		/// Writes ModelCfg.ModelID (DBh[7:4]) battery chemistry model selection.
 		/// </summary>
-		DeviceError SetBatteryChemistryModel(ModelId value);
+		Result<void> SetBatteryChemistryModel(ModelId value);
 
 		/// <summary>
 		/// Reads ModelCfg.VChg (DBh[10]) high-voltage charge profile selection.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<bool, DeviceError> IsHighVoltageChargeProfileEnabled() const;
+		[[nodiscard]] Result<bool> IsHighVoltageChargeProfileEnabled() const;
 
 		/// <summary>
 		/// Writes ModelCfg.VChg (DBh[10]) high-voltage charge profile selection.
 		/// </summary>
-		DeviceError SetHighVoltageChargeProfileEnabled(bool value);
+		Result<void> SetHighVoltageChargeProfileEnabled(bool value);
 
 		/// <summary>
 		/// Reads ModelCfg.Refresh (DBh[15]) model refresh in-progress flag.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<bool, DeviceError> IsModelRefreshInProgress() const;
+		[[nodiscard]] Result<bool> IsModelRefreshInProgress() const;
 
 		/// <summary>
 		/// Writes ModelCfg.Refresh (DBh[15]) to request model refresh.
 		/// </summary>
-		DeviceError SetModelRefreshRequested(bool value);
+		Result<void> SetModelRefreshRequested(bool value);
 
 		/// <summary>
 		/// Reads RepCap register (05h), reported remaining capacity estimate.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<MicroAmpereHours, DeviceError> GetRemainingCapacityEstimate() const;
+		[[nodiscard]] Result<MicroAmpereHours> GetRemainingCapacityEstimate() const;
 
 		/// <summary>
 		/// Reads FullCapRep register (10h), reported full capacity estimate.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<MicroAmpereHours, DeviceError> GetReportedFullCapacityEstimate() const;
+		[[nodiscard]] Result<MicroAmpereHours> GetReportedFullCapacityEstimate() const;
 
 		/// <summary>
 		/// Writes FullCapRep register (10h), reported full capacity estimate.
 		/// </summary>
-		DeviceError SetReportedFullCapacityEstimate(MicroAmpereHours valueuAh);
+		Result<void> SetReportedFullCapacityEstimate(MicroAmpereHours valueuAh);
 
 		/// <summary>
 		/// Reads FullCapNom register (23h), nominal full capacity estimate.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<MicroAmpereHours, DeviceError> GetNominalFullCapacityEstimate() const;
+		[[nodiscard]] Result<MicroAmpereHours> GetNominalFullCapacityEstimate() const;
 
 		/// <summary>
 		/// Writes FullCapNom register (23h), nominal full capacity estimate.
 		/// </summary>
-		DeviceError SetNominalFullCapacityEstimate(MicroAmpereHours cap);
+		Result<void> SetNominalFullCapacityEstimate(MicroAmpereHours cap);
 
 		/// <summary>
 		/// Reads RepSOC register (06h) as normalized state-of-charge factor.
 		/// Datasheet LSB is 1/256% (0x6400 = 100%).
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<NormalizedIntFactor, DeviceError> GetRemainingStateOfCharge() const;
+		[[nodiscard]] Result<NormalizedIntFactor> GetRemainingStateOfCharge() const;
 
 		/// <summary>
 		/// Reads Current register (0Ah), instantaneous pack current.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<MicroAmperes, DeviceError> GetInstantCurrent() const;
+		[[nodiscard]] Result<MicroAmperes> GetInstantCurrent() const;
 
 		/// <summary>
 		/// Reads TTE register (11h), time-to-empty in raw register units.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint16_t, DeviceError> GetTimeToEmptyRaw() const;
+		[[nodiscard]] Result<uint16_t> GetTimeToEmptyRaw() const;
 
 		/// <summary>
 		/// Reads TTF register (20h), time-to-full in raw register units.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint16_t, DeviceError> GetTimeToFullRaw() const;
+		[[nodiscard]] Result<uint16_t> GetTimeToFullRaw() const;
 
 		/// <summary>
 		/// Reads Cycles register (17h), cycle counter.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint16_t, DeviceError> GetCycleCount() const;
+		[[nodiscard]] Result<uint16_t> GetCycleCount() const;
 
 		/// <summary>
 		/// Writes Cycles register (17h), cycle counter.
 		/// </summary>
-		DeviceError SetCycleCount(uint16_t value);
+		Result<void> SetCycleCount(uint16_t value);
 
 		/// <summary>
 		/// Reads RComp0 register (38h), temperature compensation baseline value.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint16_t, DeviceError> GetTemperatureCompensationBaseline() const;
+		[[nodiscard]] Result<uint16_t> GetTemperatureCompensationBaseline() const;
 
 		/// <summary>
 		/// Writes RComp0 register (38h), temperature compensation baseline value.
 		/// </summary>
-		DeviceError SetTemperatureCompensationBaseline(uint16_t value);
+		Result<void> SetTemperatureCompensationBaseline(uint16_t value);
 
 		/// <summary>
 		/// Reads TempCo register (39h), temperature compensation coefficient.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint16_t, DeviceError> GetTemperatureCompensationCoefficient() const;
+		[[nodiscard]] Result<uint16_t> GetTemperatureCompensationCoefficient() const;
 
 		/// <summary>
 		/// Writes TempCo register (39h), temperature compensation coefficient.
 		/// </summary>
-		DeviceError SetTemperatureCompensationCoefficient(uint16_t value);
+		Result<void> SetTemperatureCompensationCoefficient(uint16_t value);
 
 		/// <summary>
 		/// Reads VCell register (09h), instantaneous cell/pack voltage.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<MicroVolts, DeviceError> GetInstantVoltage() const;
+		[[nodiscard]] Result<MicroVolts> GetInstantVoltage() const;
 
 		/// <summary>
 		/// Reads Config register (1Dh), operation and alert-configuration flags.
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<ConfigFlags, DeviceError> GetDeviceConfiguration() const;
+		[[nodiscard]] Result<ConfigFlags> GetDeviceConfiguration() const;
 
 		/// <summary>
 		/// Writes Config register (1Dh), operation and alert-configuration flags.
 		/// </summary>
-		DeviceError SetDeviceConfiguration(ConfigFlags value);
+		Result<void> SetDeviceConfiguration(ConfigFlags value);
 
 		/// <summary>
 		/// Reads VAlrtTh register (01h) voltage alert thresholds (raw encoded bytes).
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<AlertThresholdRaw8, DeviceError> GetVoltageAlertThresholdRaw() const;
+		[[nodiscard]] Result<AlertThresholdRaw8> GetVoltageAlertThresholdRaw() const;
 		/// <summary>
 		/// Writes VAlrtTh register (01h) voltage alert thresholds (raw encoded bytes).
 		/// </summary>
-		DeviceError SetVoltageAlertThresholdRaw(const AlertThresholdRaw8& value);
+		Result<void> SetVoltageAlertThresholdRaw(const AlertThresholdRaw8& value);
 		/// <summary>
 		/// Reads TAlrtTh register (02h) temperature alert thresholds (raw encoded bytes).
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<AlertThresholdRaw8, DeviceError> GetTemperatureAlertThresholdRaw() const;
+		[[nodiscard]] Result<AlertThresholdRaw8> GetTemperatureAlertThresholdRaw() const;
 		/// <summary>
 		/// Writes TAlrtTh register (02h) temperature alert thresholds (raw encoded bytes).
 		/// </summary>
-		DeviceError SetTemperatureAlertThresholdRaw(const AlertThresholdRaw8& value);
+		Result<void> SetTemperatureAlertThresholdRaw(const AlertThresholdRaw8& value);
 		/// <summary>
 		/// Reads SAlrtTh register (03h) SOC alert thresholds (raw encoded bytes).
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<AlertThresholdRaw8, DeviceError> GetSocAlertThresholdRaw() const;
+		[[nodiscard]] Result<AlertThresholdRaw8> GetSocAlertThresholdRaw() const;
 		/// <summary>
 		/// Writes SAlrtTh register (03h) SOC alert thresholds (raw encoded bytes).
 		/// </summary>
-		DeviceError SetSocAlertThresholdRaw(const AlertThresholdRaw8& value);
+		Result<void> SetSocAlertThresholdRaw(const AlertThresholdRaw8& value);
 		/// <summary>
 		/// Reads IAlrtTh register (B4h) current alert thresholds (raw encoded bytes).
 		/// </summary>
-		[[nodiscard]] [[nodiscard]] std::expected<AlertThresholdRaw8, DeviceError> GetCurrentAlertThresholdRaw() const;
+		[[nodiscard]] Result<AlertThresholdRaw8> GetCurrentAlertThresholdRaw() const;
 		/// <summary>
 		/// Writes IAlrtTh register (B4h) current alert thresholds (raw encoded bytes).
 		/// </summary>
-		DeviceError SetCurrentAlertThresholdRaw(const AlertThresholdRaw8& value);
+		Result<void> SetCurrentAlertThresholdRaw(const AlertThresholdRaw8& value);
 
 		/// <summary>Reads AtRate register (04h), theoretical load current input.</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<MicroAmperes, DeviceError> GetTheoreticalLoadCurrent() const;
+		[[nodiscard]] Result<MicroAmperes> GetTheoreticalLoadCurrent() const;
 		/// <summary>Writes AtRate register (04h), theoretical load current input.</summary>
-		DeviceError SetTheoreticalLoadCurrent(MicroAmperes value);
+		Result<void> SetTheoreticalLoadCurrent(MicroAmperes value);
 
 		/// <summary>Reads Age register (07h) as normalized age/capacity ratio factor (Age%).</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<NormalizedIntFactor, DeviceError> GetAgeEstimate() const;
+		[[nodiscard]] Result<NormalizedIntFactor> GetAgeEstimate() const;
 		/// <summary>Writes Age register (07h) as normalized age/capacity ratio factor (Age%).</summary>
-		DeviceError SetAgeEstimate(NormalizedIntFactor value);
+		Result<void> SetAgeEstimate(NormalizedIntFactor value);
 		/// <summary>Reads Temp register (08h) measured battery temperature.</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<MilliCelsius, DeviceError> GetBatteryTemperature() const;
+		[[nodiscard]] Result<MilliCelsius> GetBatteryTemperature() const;
 		/// <summary>Writes Temp register (08h) measured battery temperature register value.</summary>
-		DeviceError SetBatteryTemperature(MilliCelsius value);
+		Result<void> SetBatteryTemperature(MilliCelsius value);
 		/// <summary>Reads AvgCurrent register (0Bh), averaged battery current.</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<MicroAmperes, DeviceError> GetAverageCurrent() const;
+		[[nodiscard]] Result<MicroAmperes> GetAverageCurrent() const;
 		/// <summary>Writes AvgCurrent register (0Bh), averaged battery current register value.</summary>
-		DeviceError SetAverageCurrent(MicroAmperes value);
+		Result<void> SetAverageCurrent(MicroAmperes value);
 		/// <summary>Reads QResidual register (0Ch), internal residual capacity term. Internal register.</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<CapacityAccumulator, DeviceError> GetResidualCapacityTerm() const;
+		[[nodiscard]] Result<CapacityAccumulator> GetResidualCapacityTerm() const;
 		/// <summary>Writes QResidual register (0Ch). Internal register.</summary>
-		DeviceError SetResidualCapacityTerm(CapacityAccumulator value);
+		Result<void> SetResidualCapacityTerm(CapacityAccumulator value);
 		/// <summary>Reads MixSOC register (0Dh), mixed SOC estimate as normalized factor (1/256% LSB).</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<NormalizedIntFactor, DeviceError> GetMixedSoc() const;
+		[[nodiscard]] Result<NormalizedIntFactor> GetMixedSoc() const;
 		/// <summary>Writes MixSOC register (0Dh), mixed SOC estimate as normalized factor (1/256% LSB).</summary>
-		DeviceError SetMixedSoc(NormalizedIntFactor value);
+		Result<void> SetMixedSoc(NormalizedIntFactor value);
 		/// <summary>Reads AvSOC register (0Eh), filtered SOC estimate as normalized factor (1/256% LSB).</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<NormalizedIntFactor, DeviceError> GetFilteredSoc() const;
+		[[nodiscard]] Result<NormalizedIntFactor> GetFilteredSoc() const;
 		/// <summary>Writes AvSOC register (0Eh), filtered SOC estimate as normalized factor (1/256% LSB).</summary>
-		DeviceError SetFilteredSoc(NormalizedIntFactor value);
+		Result<void> SetFilteredSoc(NormalizedIntFactor value);
 		/// <summary>Reads MixCap register (0Fh), mixed capacity estimate.</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<MicroAmpereHours, DeviceError> GetMixedCapacityEstimate() const;
+		[[nodiscard]] Result<MicroAmpereHours> GetMixedCapacityEstimate() const;
 		/// <summary>Writes MixCap register (0Fh), mixed capacity estimate.</summary>
-		DeviceError SetMixedCapacityEstimate(MicroAmpereHours value);
+		Result<void> SetMixedCapacityEstimate(MicroAmpereHours value);
 		/// <summary>Reads QRTable00 register (12h). Internal model register.</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<ModelQrParameter, DeviceError> GetModelQrTable00() const;
+		[[nodiscard]] Result<ModelQrParameter> GetModelQrTable00() const;
 		/// <summary>Writes QRTable00 register (12h). Internal model register.</summary>
-		DeviceError SetModelQrTable00(ModelQrParameter value);
+		Result<void> SetModelQrTable00(ModelQrParameter value);
 		/// <summary>Reads FullSocThr register (13h) full SOC threshold as normalized factor (1/256% LSB).</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<NormalizedIntFactor, DeviceError> GetFullSocThreshold() const;
+		[[nodiscard]] Result<NormalizedIntFactor> GetFullSocThreshold() const;
 		/// <summary>Writes FullSocThr register (13h) full SOC threshold as normalized factor (1/256% LSB).</summary>
-		DeviceError SetFullSocThreshold(NormalizedIntFactor value);
+		Result<void> SetFullSocThreshold(NormalizedIntFactor value);
 		/// <summary>Reads RCell register (14h), internal resistance estimate in raw format.</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<uint16_t, DeviceError> GetCellResistanceRaw() const;
+		[[nodiscard]] Result<uint16_t> GetCellResistanceRaw() const;
 		/// <summary>Writes RCell register (14h), internal resistance estimate in raw format.</summary>
-		DeviceError SetCellResistanceRaw(uint16_t value);
+		Result<void> SetCellResistanceRaw(uint16_t value);
 		/// <summary>Reads AvgTA register (16h), averaged temperature.</summary>
-		[[nodiscard]] [[nodiscard]] std::expected<MilliCelsius, DeviceError> GetAverageTemperature() const;
+		[[nodiscard]] Result<MilliCelsius> GetAverageTemperature() const;
 		/// <summary>Writes AvgTA register (16h), averaged temperature register value.</summary>
-		DeviceError SetAverageTemperature(MilliCelsius value);
+		Result<void> SetAverageTemperature(MilliCelsius value);
 		/// <summary>Reads AvgVCell register (19h), averaged voltage.</summary>
-		[[nodiscard]] std::expected<MicroVolts, DeviceError> GetAverageVoltage() const;
+		[[nodiscard]] Result<MicroVolts> GetAverageVoltage() const;
 		/// <summary>Writes AvgVCell register (19h), averaged voltage register value.</summary>
-		DeviceError SetAverageVoltage(MicroVolts value);
+		Result<void> SetAverageVoltage(MicroVolts value);
 		/// <summary>Reads MaxMinTemp register (1Ah), max/min temperature bytes in one transaction.</summary>
-		[[nodiscard]] std::expected<MinMaxRaw8, DeviceError> GetTemperatureMinMaxRaw() const;
+		[[nodiscard]] Result<MinMaxRaw8> GetTemperatureMinMaxRaw() const;
 		/// <summary>Writes MaxMinTemp register (1Ah), max/min temperature bytes in one transaction.</summary>
-		DeviceError SetTemperatureMinMaxRaw(const MinMaxRaw8& value);
+		Result<void> SetTemperatureMinMaxRaw(const MinMaxRaw8& value);
 		/// <summary>Reads MaxMinVolt register (1Bh), max/min voltage bytes in one transaction.</summary>
-		[[nodiscard]] std::expected<MinMaxRaw8, DeviceError> GetVoltageMinMaxRaw() const;
+		[[nodiscard]] Result<MinMaxRaw8> GetVoltageMinMaxRaw() const;
 		/// <summary>Writes MaxMinVolt register (1Bh), max/min voltage bytes in one transaction.</summary>
-		DeviceError SetVoltageMinMaxRaw(const MinMaxRaw8& value);
+		Result<void> SetVoltageMinMaxRaw(const MinMaxRaw8& value);
 		/// <summary>Reads MaxMinCurr register (1Ch), max/min current bytes in one transaction.</summary>
-		[[nodiscard]] std::expected<MinMaxRaw8, DeviceError> GetCurrentMinMaxRaw() const;
+		[[nodiscard]] Result<MinMaxRaw8> GetCurrentMinMaxRaw() const;
 		/// <summary>Writes MaxMinCurr register (1Ch), max/min current bytes in one transaction.</summary>
-		DeviceError SetCurrentMinMaxRaw(const MinMaxRaw8& value);
+		Result<void> SetCurrentMinMaxRaw(const MinMaxRaw8& value);
 		/// <summary>Reads AvCap register (1Fh), filtered available capacity estimate.</summary>
-		[[nodiscard]] std::expected<MicroAmpereHours, DeviceError> GetFilteredAvailableCapacityEstimate() const;
+		[[nodiscard]] Result<MicroAmpereHours> GetFilteredAvailableCapacityEstimate() const;
 		/// <summary>Writes AvCap register (1Fh), filtered available capacity estimate.</summary>
-		DeviceError SetFilteredAvailableCapacityEstimate(MicroAmpereHours value);
+		Result<void> SetFilteredAvailableCapacityEstimate(MicroAmpereHours value);
 		/// <summary>Reads DevName register (21h) silicon device identifier.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetDeviceNameCode() const;
+		[[nodiscard]] Result<uint16_t> GetDeviceNameCode() const;
 		/// <summary>Reads QRTable10 register (22h). Internal model register.</summary>
-		[[nodiscard]] std::expected<ModelQrParameter, DeviceError> GetModelQrTable10() const;
+		[[nodiscard]] Result<ModelQrParameter> GetModelQrTable10() const;
 		/// <summary>Writes QRTable10 register (22h). Internal model register.</summary>
-		DeviceError SetModelQrTable10(ModelQrParameter value);
+		Result<void> SetModelQrTable10(ModelQrParameter value);
 		/// <summary>Reads AIN register (27h), auxiliary ADC input in raw format.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetAuxInputRaw() const;
+		[[nodiscard]] Result<uint16_t> GetAuxInputRaw() const;
 		/// <summary>Writes AIN register (27h), auxiliary ADC input register value.</summary>
-		DeviceError SetAuxInputRaw(uint16_t value);
+		Result<void> SetAuxInputRaw(uint16_t value);
 		/// <summary>Reads LearnCfg register (28h). Internal learning register.</summary>
-		[[nodiscard]] std::expected<LearnConfiguration, DeviceError> GetLearnConfiguration() const;
+		[[nodiscard]] Result<LearnConfiguration> GetLearnConfiguration() const;
 		/// <summary>Writes LearnCfg register (28h). Internal learning register.</summary>
-		DeviceError SetLearnConfiguration(LearnConfiguration value);
+		Result<void> SetLearnConfiguration(LearnConfiguration value);
 		/// <summary>Reads FilterCfg register (29h). Internal filter register.</summary>
-		[[nodiscard]] std::expected<FilterConfiguration, DeviceError> GetFilterConfiguration() const;
+		[[nodiscard]] Result<FilterConfiguration> GetFilterConfiguration() const;
 		/// <summary>Writes FilterCfg register (29h). Internal filter register.</summary>
-		DeviceError SetFilterConfiguration(FilterConfiguration value);
+		Result<void> SetFilterConfiguration(FilterConfiguration value);
 		/// <summary>Reads RelaxCfg register (2Ah). Internal relax register.</summary>
-		[[nodiscard]] std::expected<RelaxConfiguration, DeviceError> GetRelaxConfiguration() const;
+		[[nodiscard]] Result<RelaxConfiguration> GetRelaxConfiguration() const;
 		/// <summary>Writes RelaxCfg register (2Ah). Internal relax register.</summary>
-		DeviceError SetRelaxConfiguration(RelaxConfiguration value);
+		Result<void> SetRelaxConfiguration(RelaxConfiguration value);
 		/// <summary>Reads MiscCfg register (2Bh). Internal algorithm register.</summary>
-		[[nodiscard]] std::expected<MiscConfiguration, DeviceError> GetMiscConfiguration() const;
+		[[nodiscard]] Result<MiscConfiguration> GetMiscConfiguration() const;
 		/// <summary>Writes MiscCfg register (2Bh). Internal algorithm register.</summary>
-		DeviceError SetMiscConfiguration(MiscConfiguration value);
+		Result<void> SetMiscConfiguration(MiscConfiguration value);
 		/// <summary>Reads TGain register (2Ch). Internal calibration register.</summary>
-		[[nodiscard]] std::expected<TemperatureGain, DeviceError> GetTemperatureGain() const;
+		[[nodiscard]] Result<TemperatureGain> GetTemperatureGain() const;
 		/// <summary>Writes TGain register (2Ch). Internal calibration register.</summary>
-		DeviceError SetTemperatureGain(TemperatureGain value);
+		Result<void> SetTemperatureGain(TemperatureGain value);
 		/// <summary>Reads TOff register (2Dh). Internal calibration register.</summary>
-		[[nodiscard]] std::expected<TemperatureOffset, DeviceError> GetTemperatureOffset() const;
+		[[nodiscard]] Result<TemperatureOffset> GetTemperatureOffset() const;
 		/// <summary>Writes TOff register (2Dh). Internal calibration register.</summary>
-		DeviceError SetTemperatureOffset(TemperatureOffset value);
+		Result<void> SetTemperatureOffset(TemperatureOffset value);
 		/// <summary>Reads CGain register (2Eh). Internal calibration register.</summary>
-		[[nodiscard]] std::expected<CurrentGain, DeviceError> GetCurrentGain() const;
+		[[nodiscard]] Result<CurrentGain> GetCurrentGain() const;
 		/// <summary>Writes CGain register (2Eh). Internal calibration register.</summary>
-		DeviceError SetCurrentGain(CurrentGain value);
+		Result<void> SetCurrentGain(CurrentGain value);
 		/// <summary>Reads COff register (2Fh). Internal calibration register.</summary>
-		[[nodiscard]] std::expected<CurrentOffset, DeviceError> GetCurrentOffset() const;
+		[[nodiscard]] Result<CurrentOffset> GetCurrentOffset() const;
 		/// <summary>Writes COff register (2Fh). Internal calibration register.</summary>
-		DeviceError SetCurrentOffset(CurrentOffset value);
+		Result<void> SetCurrentOffset(CurrentOffset value);
 		/// <summary>Reads QRTable20 register (32h). Internal model register.</summary>
-		[[nodiscard]] std::expected<ModelQrParameter, DeviceError> GetModelQrTable20() const;
+		[[nodiscard]] Result<ModelQrParameter> GetModelQrTable20() const;
 		/// <summary>Writes QRTable20 register (32h). Internal model register.</summary>
-		DeviceError SetModelQrTable20(ModelQrParameter value);
+		Result<void> SetModelQrTable20(ModelQrParameter value);
 		/// <summary>Reads DieTemp register (34h), internal IC die temperature.</summary>
-		[[nodiscard]] std::expected<MilliCelsius, DeviceError> GetDieTemperature() const;
+		[[nodiscard]] Result<MilliCelsius> GetDieTemperature() const;
 		/// <summary>Writes DieTemp register (34h), internal IC die temperature register value.</summary>
-		DeviceError SetDieTemperature(MilliCelsius value);
+		Result<void> SetDieTemperature(MilliCelsius value);
 		/// <summary>Reads FullCap register (35h), learned full capacity.</summary>
-		[[nodiscard]] std::expected<MicroAmpereHours, DeviceError> GetLearnedFullCapacity() const;
+		[[nodiscard]] Result<MicroAmpereHours> GetLearnedFullCapacity() const;
 		/// <summary>Writes FullCap register (35h), learned full capacity.</summary>
-		DeviceError SetLearnedFullCapacity(MicroAmpereHours value);
+		Result<void> SetLearnedFullCapacity(MicroAmpereHours value);
 		/// <summary>Reads Timer register (3Eh), low timer word. Internal register.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetTimerLowWord() const;
+		[[nodiscard]] Result<uint16_t> GetTimerLowWord() const;
 		/// <summary>Writes Timer register (3Eh), low timer word. Internal register.</summary>
-		DeviceError SetTimerLowWord(uint16_t value);
+		Result<void> SetTimerLowWord(uint16_t value);
 		/// <summary>Reads ShdnTimer register (3Fh), shutdown timer. Internal register.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetShutdownTimerRaw() const;
+		[[nodiscard]] Result<uint16_t> GetShutdownTimerRaw() const;
 		/// <summary>Writes ShdnTimer register (3Fh), shutdown timer. Internal register.</summary>
-		DeviceError SetShutdownTimerRaw(uint16_t value);
+		Result<void> SetShutdownTimerRaw(uint16_t value);
 		/// <summary>Reads QRTable30 register (42h). Internal model register.</summary>
-		[[nodiscard]] std::expected<ModelQrParameter, DeviceError> GetModelQrTable30() const;
+		[[nodiscard]] Result<ModelQrParameter> GetModelQrTable30() const;
 		/// <summary>Writes QRTable30 register (42h). Internal model register.</summary>
-		DeviceError SetModelQrTable30(ModelQrParameter value);
+		Result<void> SetModelQrTable30(ModelQrParameter value);
 		/// <summary>Reads RGain register (43h). Internal calibration register.</summary>
-		[[nodiscard]] std::expected<ResistanceGain, DeviceError> GetResistanceGain() const;
+		[[nodiscard]] Result<ResistanceGain> GetResistanceGain() const;
 		/// <summary>Writes RGain register (43h). Internal calibration register.</summary>
-		DeviceError SetResistanceGain(ResistanceGain value);
+		Result<void> SetResistanceGain(ResistanceGain value);
 		/// <summary>Reads dQAcc register (45h). Internal learning accumulator.</summary>
-		[[nodiscard]] std::expected<CapacityAccumulator, DeviceError> GetCapacityAccumulator() const;
+		[[nodiscard]] Result<CapacityAccumulator> GetCapacityAccumulator() const;
 		/// <summary>Writes dQAcc register (45h). Internal learning accumulator.</summary>
-		DeviceError SetCapacityAccumulator(CapacityAccumulator value);
+		Result<void> SetCapacityAccumulator(CapacityAccumulator value);
 		/// <summary>Reads dPAcc register (46h). Internal learning accumulator.</summary>
-		[[nodiscard]] std::expected<PowerAccumulator, DeviceError> GetPowerAccumulator() const;
+		[[nodiscard]] Result<PowerAccumulator> GetPowerAccumulator() const;
 		/// <summary>Writes dPAcc register (46h). Internal learning accumulator.</summary>
-		DeviceError SetPowerAccumulator(PowerAccumulator value);
+		Result<void> SetPowerAccumulator(PowerAccumulator value);
 		/// <summary>Reads ConvgCfg register (49h). Internal convergence register.</summary>
-		[[nodiscard]] std::expected<ConvergenceConfiguration, DeviceError> GetConvergenceConfiguration() const;
+		[[nodiscard]] Result<ConvergenceConfiguration> GetConvergenceConfiguration() const;
 		/// <summary>Writes ConvgCfg register (49h). Internal convergence register.</summary>
-		DeviceError SetConvergenceConfiguration(ConvergenceConfiguration value);
+		Result<void> SetConvergenceConfiguration(ConvergenceConfiguration value);
 		/// <summary>Reads VFRemCap register (4Ah), voltage-filtered remaining capacity.</summary>
-		[[nodiscard]] std::expected<MicroAmpereHours, DeviceError> GetVoltageFilteredRemainingCapacity() const;
+		[[nodiscard]] Result<MicroAmpereHours> GetVoltageFilteredRemainingCapacity() const;
 		/// <summary>Writes VFRemCap register (4Ah), voltage-filtered remaining capacity.</summary>
-		DeviceError SetVoltageFilteredRemainingCapacity(MicroAmpereHours value);
+		Result<void> SetVoltageFilteredRemainingCapacity(MicroAmpereHours value);
 		/// <summary>Reads QH register (4Dh). Internal coulomb-counter accumulator register.</summary>
-		[[nodiscard]] std::expected<ChargeAccumulator, DeviceError> GetChargeAccumulator() const;
+		[[nodiscard]] Result<ChargeAccumulator> GetChargeAccumulator() const;
 		/// <summary>Writes QH register (4Dh). Internal coulomb-counter accumulator register.</summary>
-		DeviceError SetChargeAccumulator(ChargeAccumulator value);
+		Result<void> SetChargeAccumulator(ChargeAccumulator value);
 		/// <summary>Reads Status2 register (B0h). Internal/extended status register.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetStatus2Raw() const;
+		[[nodiscard]] Result<uint16_t> GetStatus2Raw() const;
 		/// <summary>Writes Status2 register (B0h). Internal/extended status register.</summary>
-		DeviceError SetStatus2Raw(uint16_t value);
+		Result<void> SetStatus2Raw(uint16_t value);
 		/// <summary>Reads Power register (B1h), instantaneous power in raw register format.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetInstantPowerRaw() const;
+		[[nodiscard]] Result<uint16_t> GetInstantPowerRaw() const;
 		/// <summary>Writes Power register (B1h), instantaneous power register value.</summary>
-		DeviceError SetInstantPowerRaw(uint16_t value);
+		Result<void> SetInstantPowerRaw(uint16_t value);
 		/// <summary>Reads ID register (B2h), device ID or user memory alias.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetDeviceIdOrUserMem2() const;
+		[[nodiscard]] Result<uint16_t> GetDeviceIdOrUserMem2() const;
 		/// <summary>Writes UserMem2 alias at B2h (overlaps ID).</summary>
-		DeviceError SetUserMem2(uint16_t value);
+		Result<void> SetUserMem2(uint16_t value);
 		/// <summary>Reads AvgPower register (B3h), averaged power in raw register format.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetAveragePowerRaw() const;
+		[[nodiscard]] Result<uint16_t> GetAveragePowerRaw() const;
 		/// <summary>Writes AvgPower register (B3h), averaged power register value.</summary>
-		DeviceError SetAveragePowerRaw(uint16_t value);
+		Result<void> SetAveragePowerRaw(uint16_t value);
 		/// <summary>Reads TTFCfg register (B5h). Internal algorithm register.</summary>
-		[[nodiscard]] std::expected<TimeToFullConfiguration, DeviceError> GetTimeToFullConfiguration() const;
+		[[nodiscard]] Result<TimeToFullConfiguration> GetTimeToFullConfiguration() const;
 		/// <summary>Writes TTFCfg register (B5h). Internal algorithm register.</summary>
-		DeviceError SetTimeToFullConfiguration(TimeToFullConfiguration value);
+		Result<void> SetTimeToFullConfiguration(TimeToFullConfiguration value);
 		/// <summary>Reads CVMixCap register (B6h). Internal algorithm register.</summary>
-		[[nodiscard]] std::expected<CvMixedCapacityParameter, DeviceError> GetCvMixedCapacity() const;
+		[[nodiscard]] Result<CvMixedCapacityParameter> GetCvMixedCapacity() const;
 		/// <summary>Writes CVMixCap register (B6h). Internal algorithm register.</summary>
-		DeviceError SetCvMixedCapacity(CvMixedCapacityParameter value);
+		Result<void> SetCvMixedCapacity(CvMixedCapacityParameter value);
 		/// <summary>Reads CVHalfTime register (B7h). Internal algorithm register.</summary>
-		[[nodiscard]] std::expected<CvHalfTimeParameter, DeviceError> GetCvHalfTime() const;
+		[[nodiscard]] Result<CvHalfTimeParameter> GetCvHalfTime() const;
 		/// <summary>Writes CVHalfTime register (B7h). Internal algorithm register.</summary>
-		DeviceError SetCvHalfTime(CvHalfTimeParameter value);
+		Result<void> SetCvHalfTime(CvHalfTimeParameter value);
 		/// <summary>Reads CGTempCo register (B8h). Internal algorithm register.</summary>
-		[[nodiscard]] std::expected<ChargeGainTemperatureCoefficient, DeviceError> GetChargeGainTemperatureCoefficient() const;
+		[[nodiscard]] Result<ChargeGainTemperatureCoefficient> GetChargeGainTemperatureCoefficient() const;
 		/// <summary>Writes CGTempCo register (B8h). Internal algorithm register.</summary>
-		DeviceError SetChargeGainTemperatureCoefficient(ChargeGainTemperatureCoefficient value);
+		Result<void> SetChargeGainTemperatureCoefficient(ChargeGainTemperatureCoefficient value);
 		/// <summary>Reads Curve register (B9h). Internal algorithm register.</summary>
-		[[nodiscard]] std::expected<PowerCurveConfiguration, DeviceError> GetPowerCurveConfiguration() const;
+		[[nodiscard]] Result<PowerCurveConfiguration> GetPowerCurveConfiguration() const;
 		/// <summary>Writes Curve register (B9h). Internal algorithm register.</summary>
-		DeviceError SetPowerCurveConfiguration(PowerCurveConfiguration value);
+		Result<void> SetPowerCurveConfiguration(PowerCurveConfiguration value);
 		/// <summary>Reads Config2 register (BBh), extended configuration flags.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetExtendedConfigurationRaw() const;
+		[[nodiscard]] Result<uint16_t> GetExtendedConfigurationRaw() const;
 		/// <summary>Writes Config2 register (BBh), extended configuration flags.</summary>
-		DeviceError SetExtendedConfigurationRaw(uint16_t value);
+		Result<void> SetExtendedConfigurationRaw(uint16_t value);
 		/// <summary>Reads VRipple register (BCh). Internal measurement register.</summary>
-		[[nodiscard]] std::expected<VoltageRippleMeasurement, DeviceError> GetVoltageRippleRaw() const;
+		[[nodiscard]] Result<VoltageRippleMeasurement> GetVoltageRippleRaw() const;
 		/// <summary>Writes VRipple register (BCh). Internal measurement register.</summary>
-		DeviceError SetVoltageRippleRaw(VoltageRippleMeasurement value);
+		Result<void> SetVoltageRippleRaw(VoltageRippleMeasurement value);
 		/// <summary>Reads RippleCfg register (BDh). Internal algorithm register.</summary>
-		[[nodiscard]] std::expected<RippleConfiguration, DeviceError> GetRippleConfiguration() const;
+		[[nodiscard]] Result<RippleConfiguration> GetRippleConfiguration() const;
 		/// <summary>Writes RippleCfg register (BDh). Internal algorithm register.</summary>
-		DeviceError SetRippleConfiguration(RippleConfiguration value);
+		Result<void> SetRippleConfiguration(RippleConfiguration value);
 		/// <summary>Reads TimerH register (BEh), high timer word. Internal register.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetTimerHighWord() const;
+		[[nodiscard]] Result<uint16_t> GetTimerHighWord() const;
 		/// <summary>Writes TimerH register (BEh), high timer word. Internal register.</summary>
-		DeviceError SetTimerHighWord(uint16_t value);
+		Result<void> SetTimerHighWord(uint16_t value);
 		/// <summary>Reads RSense/UserMem3 register (D0h) raw value.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetSenseResistorOrUserMem3Raw() const;
+		[[nodiscard]] Result<uint16_t> GetSenseResistorOrUserMem3Raw() const;
 		/// <summary>Writes RSense/UserMem3 register (D0h) raw value.</summary>
-		DeviceError SetSenseResistorOrUserMem3Raw(uint16_t value);
+		Result<void> SetSenseResistorOrUserMem3Raw(uint16_t value);
 		/// <summary>Reads ScOcvLim register (D1h). Internal algorithm register.</summary>
-		[[nodiscard]] std::expected<SocOcvLimitConfiguration, DeviceError> GetSocOcvLimitConfiguration() const;
+		[[nodiscard]] Result<SocOcvLimitConfiguration> GetSocOcvLimitConfiguration() const;
 		/// <summary>Writes ScOcvLim register (D1h). Internal algorithm register.</summary>
-		DeviceError SetSocOcvLimitConfiguration(SocOcvLimitConfiguration value);
+		Result<void> SetSocOcvLimitConfiguration(SocOcvLimitConfiguration value);
 		/// <summary>Reads VGain register (D2h). Internal calibration register.</summary>
-		[[nodiscard]] std::expected<VoltageGainCalibration, DeviceError> GetVoltageGain() const;
+		[[nodiscard]] Result<VoltageGainCalibration> GetVoltageGain() const;
 		/// <summary>Writes VGain register (D2h). Internal calibration register.</summary>
-		DeviceError SetVoltageGain(VoltageGainCalibration value);
+		Result<void> SetVoltageGain(VoltageGainCalibration value);
 		/// <summary>Reads SOCHold register (D3h). Internal algorithm register.</summary>
-		[[nodiscard]] std::expected<SocHoldConfiguration, DeviceError> GetSocHoldConfiguration() const;
+		[[nodiscard]] Result<SocHoldConfiguration> GetSocHoldConfiguration() const;
 		/// <summary>Writes SOCHold register (D3h). Internal algorithm register.</summary>
-		DeviceError SetSocHoldConfiguration(SocHoldConfiguration value);
+		Result<void> SetSocHoldConfiguration(SocHoldConfiguration value);
 		/// <summary>Reads MaxPeakPower register (D4h), max peak power estimate raw.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetMaximumPeakPowerRaw() const;
+		[[nodiscard]] Result<uint16_t> GetMaximumPeakPowerRaw() const;
 		/// <summary>Writes MaxPeakPower register (D4h), max peak power estimate raw.</summary>
-		DeviceError SetMaximumPeakPowerRaw(uint16_t value);
+		Result<void> SetMaximumPeakPowerRaw(uint16_t value);
 		/// <summary>Reads SusPeakPower register (D5h), sustained peak power estimate raw.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetSustainedPeakPowerRaw() const;
+		[[nodiscard]] Result<uint16_t> GetSustainedPeakPowerRaw() const;
 		/// <summary>Writes SusPeakPower register (D5h), sustained peak power estimate raw.</summary>
-		DeviceError SetSustainedPeakPowerRaw(uint16_t value);
+		Result<void> SetSustainedPeakPowerRaw(uint16_t value);
 		/// <summary>Reads PackResistance register (D6h), pack resistance estimate raw.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetPackResistanceRaw() const;
+		[[nodiscard]] Result<uint16_t> GetPackResistanceRaw() const;
 		/// <summary>Writes PackResistance register (D6h), pack resistance estimate raw.</summary>
-		DeviceError SetPackResistanceRaw(uint16_t value);
+		Result<void> SetPackResistanceRaw(uint16_t value);
 		/// <summary>Reads SysResistance register (D7h), system resistance estimate raw.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetSystemResistanceRaw() const;
+		[[nodiscard]] Result<uint16_t> GetSystemResistanceRaw() const;
 		/// <summary>Writes SysResistance register (D7h), system resistance estimate raw.</summary>
-		DeviceError SetSystemResistanceRaw(uint16_t value);
+		Result<void> SetSystemResistanceRaw(uint16_t value);
 		/// <summary>Reads MinSysVoltage register (D8h), minimum system voltage raw.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetMinimumSystemVoltageRaw() const;
+		[[nodiscard]] Result<uint16_t> GetMinimumSystemVoltageRaw() const;
 		/// <summary>Writes MinSysVoltage register (D8h), minimum system voltage raw.</summary>
-		DeviceError SetMinimumSystemVoltageRaw(uint16_t value);
+		Result<void> SetMinimumSystemVoltageRaw(uint16_t value);
 		/// <summary>Reads MPPCurrent register (D9h), max-peak-power current raw.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetMaximumPeakPowerCurrentRaw() const;
+		[[nodiscard]] Result<uint16_t> GetMaximumPeakPowerCurrentRaw() const;
 		/// <summary>Writes MPPCurrent register (D9h), max-peak-power current raw.</summary>
-		DeviceError SetMaximumPeakPowerCurrentRaw(uint16_t value);
+		Result<void> SetMaximumPeakPowerCurrentRaw(uint16_t value);
 		/// <summary>Reads SPPCurrent register (DAh), sustained-peak-power current raw.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetSustainedPeakPowerCurrentRaw() const;
+		[[nodiscard]] Result<uint16_t> GetSustainedPeakPowerCurrentRaw() const;
 		/// <summary>Writes SPPCurrent register (DAh), sustained-peak-power current raw.</summary>
-		DeviceError SetSustainedPeakPowerCurrentRaw(uint16_t value);
+		Result<void> SetSustainedPeakPowerCurrentRaw(uint16_t value);
 		/// <summary>Reads AtQResidual register (DCh), AtRate residual capacity prediction raw.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetAtRateResidualCapacityRaw() const;
+		[[nodiscard]] Result<uint16_t> GetAtRateResidualCapacityRaw() const;
 		/// <summary>Writes AtQResidual register (DCh), AtRate residual capacity prediction raw.</summary>
-		DeviceError SetAtRateResidualCapacityRaw(uint16_t value);
+		Result<void> SetAtRateResidualCapacityRaw(uint16_t value);
 		/// <summary>Reads AtTTE register (DDh), AtRate time-to-empty prediction raw.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetAtRateTimeToEmptyRaw() const;
+		[[nodiscard]] Result<uint16_t> GetAtRateTimeToEmptyRaw() const;
 		/// <summary>Writes AtTTE register (DDh), AtRate time-to-empty prediction raw.</summary>
-		DeviceError SetAtRateTimeToEmptyRaw(uint16_t value);
+		Result<void> SetAtRateTimeToEmptyRaw(uint16_t value);
 		/// <summary>Reads AtAvSOC register (DEh), AtRate average SOC prediction as normalized factor (1/256% LSB).</summary>
-		[[nodiscard]] std::expected<NormalizedIntFactor, DeviceError> GetAtRateAverageSoc() const;
+		[[nodiscard]] Result<NormalizedIntFactor> GetAtRateAverageSoc() const;
 		/// <summary>Writes AtAvSOC register (DEh), AtRate average SOC prediction as normalized factor (1/256% LSB).</summary>
-		DeviceError SetAtRateAverageSoc(NormalizedIntFactor value);
+		Result<void> SetAtRateAverageSoc(NormalizedIntFactor value);
 		/// <summary>Reads AtAvCap register (DFh), AtRate average capacity prediction raw.</summary>
-		[[nodiscard]] std::expected<uint16_t, DeviceError> GetAtRateAverageCapacityRaw() const;
+		[[nodiscard]] Result<uint16_t> GetAtRateAverageCapacityRaw() const;
 		/// <summary>Writes AtAvCap register (DFh), AtRate average capacity prediction raw.</summary>
-		DeviceError SetAtRateAverageCapacityRaw(uint16_t value);
+		Result<void> SetAtRateAverageCapacityRaw(uint16_t value);
 
 		/// <summary>
 		/// Reads a group of learning/calibration registers used by ModelGauge learning.
 		/// Internal registers.
 		/// </summary>
-		[[nodiscard]] std::expected<AlgorithmLearningParameters, DeviceError> GetAlgorithmLearningParameters() const;
+		[[nodiscard]] Result<AlgorithmLearningParameters> GetAlgorithmLearningParameters() const;
 		/// <summary>
 		/// Writes a group of learning/calibration registers used by ModelGauge learning.
 		/// Internal registers.
 		/// </summary>
-		DeviceError SetAlgorithmLearningParameters(const AlgorithmLearningParameters& value);
+		Result<void> SetAlgorithmLearningParameters(const AlgorithmLearningParameters& value);
 
 	private:
 		I2C::Api::IDriver& m_Driver;
 
-		DeviceError ReadRegisterRaw(RegOffset reg, uint8_t outData[2]) const;
+		Result<void> ReadRegisterRaw(RegOffset reg, uint8_t outData[2]) const;
 
-		DeviceError WriteRegisterRaw(RegOffset reg, const uint8_t data[2]);
+		Result<void> WriteRegisterRaw(RegOffset reg, const uint8_t data[2]);
 
 		template<typename T>
-		[[nodiscard]] std::expected<T, DeviceError> ReadRegister(RegOffset reg) const
+		[[nodiscard]] Result<T> ReadRegister(RegOffset reg) const
 		{
 			uint8_t data[2];
-			if (auto error = ReadRegisterRaw(reg, data); error != DeviceError::None)
+			if (auto result = ReadRegisterRaw(reg, data); !result.has_value())
 			{
-				return std::unexpected(error);
+				return std::unexpected(result.error());
 			}
 
 			return RegUtils::Read<T, std::endian::little>(data, 0, 16);
 		}
 
 		template<typename T>
-		DeviceError WriteRegister(RegOffset reg, T value)
+		Result<void> WriteRegister(RegOffset reg, T value)
 		{
 			uint8_t data[2] = {};
 			RegUtils::Write<T, std::endian::little>(value, data, 0, 16);
@@ -885,24 +882,24 @@ namespace PiSubmarine::Max17261
 		}
 
 		template<typename T>
-		[[nodiscard]] std::expected<T, DeviceError> ReadField(RegOffset reg, size_t startBit, size_t bitCount) const
+		[[nodiscard]] Result<T> ReadField(RegOffset reg, size_t startBit, size_t bitCount) const
 		{
 			uint8_t data[2];
-			if (auto error = ReadRegisterRaw(reg, data); error != DeviceError::None)
+			if (auto result = ReadRegisterRaw(reg, data); !result.has_value())
 			{
-				return std::unexpected(error);
+				return std::unexpected(result.error());
 			}
 
 			return RegUtils::Read<T, std::endian::little>(data, startBit, bitCount);
 		}
 
 		template<typename T>
-		DeviceError WriteField(RegOffset reg, size_t startBit, size_t bitCount, T value)
+		Result<void> WriteField(RegOffset reg, size_t startBit, size_t bitCount, T value)
 		{
 			uint8_t data[2];
-			if (auto error = ReadRegisterRaw(reg, data); error != DeviceError::None)
+			if (auto result = ReadRegisterRaw(reg, data); !result.has_value())
 			{
-				return error;
+				return std::unexpected(result.error());
 			}
 
 			RegUtils::Write<T, std::endian::little>(value, data, startBit, bitCount);
@@ -910,3 +907,4 @@ namespace PiSubmarine::Max17261
 		}
 	};
 };
+

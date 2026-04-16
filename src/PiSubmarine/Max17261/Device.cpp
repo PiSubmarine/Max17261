@@ -1,3 +1,5 @@
+#include <span>
+
 #include "PiSubmarine/Max17261/Device.h"
 
 namespace PiSubmarine::Max17261
@@ -52,188 +54,202 @@ namespace PiSubmarine::Max17261
     {
     }
 
-    bool Device::Init(const WaitFunc& waitFunc, MicroAmpereHours designCapacity, MicroAmperes terminationCurrent,
-                      MicroVolts emptyVoltage, bool forceReset)
-    {
-        if (forceReset)
-        {
-            if (ExecuteCommand(Command::Reset) != DeviceError::None)
-            {
-                return false;
-            }
-            waitFunc(std::chrono::milliseconds(500));
+	Result<void> Device::Init(const WaitFunc& waitFunc, MicroAmpereHours designCapacity, MicroAmperes terminationCurrent,
+		MicroVolts emptyVoltage, bool forceReset)
+	{
+		if (forceReset)
+		{
+			if (auto result = ExecuteCommand(Command::Reset); !result.has_value())
+			{
+				return std::unexpected(result.error());
+			}
+			waitFunc(std::chrono::milliseconds(500));
 
-            auto config2Result = ReadRegister<uint16_t>(RegOffset::Config2);
-            if (!config2Result.has_value())
-            {
-                return false;
-            }
-            auto config2 = config2Result.value();
-            config2 |= 0x0001;
-            if (WriteRegister(RegOffset::Config2, config2) != DeviceError::None)
-            {
-                return false;
-            }
-            waitFunc(std::chrono::milliseconds(500));
-        }
+			auto config2Result = ReadRegister<uint16_t>(RegOffset::Config2);
+			if (!config2Result.has_value())
+			{
+				return std::unexpected(config2Result.error());
+			}
+			auto config2 = config2Result.value();
+			config2 |= 0x0001;
+			if (auto result = WriteRegister(RegOffset::Config2, config2); !result.has_value())
+			{
+				return std::unexpected(result.error());
+			}
+			waitFunc(std::chrono::milliseconds(500));
+		}
 
-        auto statusResult = ReadRegister<Status>(RegOffset::Status);
-        if (!statusResult.has_value())
-        {
-            return false;
-        }
-        auto status = statusResult.value();
+		auto statusResult = ReadRegister<Status>(RegOffset::Status);
+		if (!statusResult.has_value())
+		{
+			return std::unexpected(statusResult.error());
+		}
+		auto status = statusResult.value();
 
-        if (RegUtils::HasAllFlags(status, Status::PowerOnReset))
-        {
-            while (true)
-            {
-                auto fstatResult = ReadRegister<FuelGaugeStatus>(RegOffset::FStat);
-                if (!fstatResult.has_value())
-                {
-                    return false;
-                }
-                auto fstat = fstatResult.value();
+		if (RegUtils::HasAllFlags(status, Status::PowerOnReset))
+		{
+			while (true)
+			{
+				auto fstatResult = ReadRegister<FuelGaugeStatus>(RegOffset::FStat);
+				if (!fstatResult.has_value())
+				{
+					return std::unexpected(fstatResult.error());
+				}
+				auto fstat = fstatResult.value();
 
-                bool dnr = RegUtils::HasAllFlags(fstat, FuelGaugeStatus::DataNotReady);
-                if (!dnr)
-                {
-                    break;
-                }
-                waitFunc(std::chrono::milliseconds(10));
-            }
+				bool dnr = RegUtils::HasAllFlags(fstat, FuelGaugeStatus::DataNotReady);
+				if (!dnr)
+				{
+					break;
+				}
+				waitFunc(std::chrono::milliseconds(10));
+			}
 
-            auto hibCfgResult = ReadRegister<uint16_t>(RegOffset::HibCfg);
-            if (!hibCfgResult.has_value())
-            {
-                return false;
-            }
-            auto hibCfg = hibCfgResult.value();
+			auto hibCfgResult = ReadRegister<uint16_t>(RegOffset::HibCfg);
+			if (!hibCfgResult.has_value())
+			{
+				return std::unexpected(hibCfgResult.error());
+			}
+			auto hibCfg = hibCfgResult.value();
 
-            if (ExecuteCommand(Command::SoftWakeup) != DeviceError::None)
-            {
-                return false;
-            }
-            if (WriteRegister<uint16_t>(RegOffset::HibCfg, 0) != DeviceError::None)
-            {
-                return false;
-            }
-            if (ExecuteCommand(Command::Clear) != DeviceError::None)
-            {
-                return false;
-            }
+			if (auto result = ExecuteCommand(Command::SoftWakeup); !result.has_value())
+			{
+				return std::unexpected(result.error());
+			}
+			if (auto result = WriteRegister<uint16_t>(RegOffset::HibCfg, 0); !result.has_value())
+			{
+				return std::unexpected(result.error());
+			}
+			if (auto result = ExecuteCommand(Command::Clear); !result.has_value())
+			{
+				return std::unexpected(result.error());
+			}
 
-            // EZ Config
-            if (SetDesignCapacity(designCapacity) != DeviceError::None ||
-                SetChargeTerminationCurrent(terminationCurrent) != DeviceError::None ||
-                SetBatteryEmptyVoltage(emptyVoltage) != DeviceError::None ||
-                SetBatteryChemistryModel(ModelId::Li) != DeviceError::None ||
-                SetHighVoltageChargeProfileEnabled(false) != DeviceError::None ||
-                SetModelRefreshRequested(true) != DeviceError::None)
-            {
-                return false;
-            }
+			if (auto result = SetDesignCapacity(designCapacity); !result.has_value())
+			{
+				return std::unexpected(result.error());
+			}
+			if (auto result = SetChargeTerminationCurrent(terminationCurrent); !result.has_value())
+			{
+				return std::unexpected(result.error());
+			}
+			if (auto result = SetBatteryEmptyVoltage(emptyVoltage); !result.has_value())
+			{
+				return std::unexpected(result.error());
+			}
+			if (auto result = SetBatteryChemistryModel(ModelId::Li); !result.has_value())
+			{
+				return std::unexpected(result.error());
+			}
+			if (auto result = SetHighVoltageChargeProfileEnabled(false); !result.has_value())
+			{
+				return std::unexpected(result.error());
+			}
+			if (auto result = SetModelRefreshRequested(true); !result.has_value())
+			{
+				return std::unexpected(result.error());
+			}
 
-            while (true)
-            {
-                auto refreshFlagResult = IsModelRefreshInProgress();
-                if (!refreshFlagResult.has_value())
-                {
-                    return false;
-                }
-                if (!refreshFlagResult.value())
-                {
-                    break;
-                }
-                waitFunc(std::chrono::milliseconds(10));
-            }
+			while (true)
+			{
+				auto refreshFlagResult = IsModelRefreshInProgress();
+				if (!refreshFlagResult.has_value())
+				{
+					return std::unexpected(refreshFlagResult.error());
+				}
+				if (!refreshFlagResult.value())
+				{
+					break;
+				}
+				waitFunc(std::chrono::milliseconds(10));
+			}
 
-            if (WriteRegister(RegOffset::HibCfg, hibCfg) != DeviceError::None)
-            {
-                return false;
-            }
-        }
+			if (auto result = WriteRegister(RegOffset::HibCfg, hibCfg); !result.has_value())
+			{
+				return std::unexpected(result.error());
+			}
+		}
 
-        while (true)
-        {
-            statusResult = ReadRegister<Status>(RegOffset::Status);
-            if (!statusResult.has_value())
-            {
-                return false;
-            }
-            status = statusResult.value();
+		while (true)
+		{
+			statusResult = ReadRegister<Status>(RegOffset::Status);
+			if (!statusResult.has_value())
+			{
+				return std::unexpected(statusResult.error());
+			}
+			status = statusResult.value();
 
-            if (!RegUtils::HasAnyFlag(status, Status::PowerOnReset))
-            {
-                break;
-            }
+			if (!RegUtils::HasAnyFlag(status, Status::PowerOnReset))
+			{
+				break;
+			}
 
-            status = RegUtils::operator&(status, RegUtils::operator~(Status::PowerOnReset));
-            if (SetAlertStatus(status) != DeviceError::None)
-            {
-                return false;
-            }
-        }
+			status = RegUtils::operator&(status, RegUtils::operator~(Status::PowerOnReset));
+			if (auto result = SetAlertStatus(status); !result.has_value())
+			{
+				return std::unexpected(result.error());
+			}
+		}
 
-        return true;
-    }
+		return {};
+	}
 
-    std::expected<Status, DeviceError> Device::GetAlertStatus() const
+    Result<Status> Device::GetAlertStatus() const
     {
         return ReadRegister<Status>(RegOffset::Status);
     }
 
-    DeviceError Device::SetAlertStatus(Status value)
+    Result<void> Device::SetAlertStatus(Status value)
     {
         return WriteRegister(RegOffset::Status, value);
     }
 
-    std::expected<FuelGaugeStatus, DeviceError> Device::GetFuelGaugeStatus() const
+    Result<FuelGaugeStatus> Device::GetFuelGaugeStatus() const
     {
         return ReadRegister<FuelGaugeStatus>(RegOffset::FStat);
     }
 
-    std::expected<uint8_t, DeviceError> Device::GetHibernateTaskPeriodScale() const
+    Result<uint8_t> Device::GetHibernateTaskPeriodScale() const
     {
         return ReadField<uint8_t>(RegOffset::HibCfg, 0, 3);
     }
 
-    DeviceError Device::SetHibernateTaskPeriodScale(uint8_t value)
+    Result<void> Device::SetHibernateTaskPeriodScale(uint8_t value)
     {
         return WriteField(RegOffset::HibCfg, 0, 3, value);
     }
 
-    std::expected<uint8_t, DeviceError> Device::GetHibernateExitDelay() const
+    Result<uint8_t> Device::GetHibernateExitDelay() const
     {
         return ReadField<uint8_t>(RegOffset::HibCfg, 3, 2);
     }
 
-    DeviceError Device::SetHibernateExitDelay(uint8_t value)
+    Result<void> Device::SetHibernateExitDelay(uint8_t value)
     {
         return WriteField(RegOffset::HibCfg, 3, 2, value);
     }
 
-    std::expected<uint8_t, DeviceError> Device::GetHibernateCurrentThreshold() const
+    Result<uint8_t> Device::GetHibernateCurrentThreshold() const
     {
         return ReadField<uint8_t>(RegOffset::HibCfg, 8, 4);
     }
 
-    DeviceError Device::SetHibernateCurrentThreshold(uint8_t value)
+    Result<void> Device::SetHibernateCurrentThreshold(uint8_t value)
     {
         return WriteField(RegOffset::HibCfg, 8, 4, value);
     }
 
-    std::expected<uint8_t, DeviceError> Device::GetHibernateEnterDelay() const
+    Result<uint8_t> Device::GetHibernateEnterDelay() const
     {
         return ReadField<uint8_t>(RegOffset::HibCfg, 12, 3);
     }
 
-    DeviceError Device::SetHibernateEnterDelay(uint8_t value)
+    Result<void> Device::SetHibernateEnterDelay(uint8_t value)
     {
         return WriteField(RegOffset::HibCfg, 12, 3, value);
     }
 
-    std::expected<bool, DeviceError> Device::IsHibernateModeEnabled() const
+    Result<bool> Device::IsHibernateModeEnabled() const
     {
         auto valueResult = ReadField<uint8_t>(RegOffset::HibCfg, 15, 1);
         if (!valueResult.has_value())
@@ -243,28 +259,28 @@ namespace PiSubmarine::Max17261
         return valueResult.value() != 0;
     }
 
-    DeviceError Device::SetHibernateModeEnabled(bool value)
+    Result<void> Device::SetHibernateModeEnabled(bool value)
     {
         return WriteField<uint8_t>(RegOffset::HibCfg, 15, 1, static_cast<uint8_t>(value));
     }
 
-    DeviceError Device::ExecuteCommand(Command command)
+    Result<void> Device::ExecuteCommand(Command command)
     {
         return WriteRegister(RegOffset::Command, command);
     }
 
-    std::expected<Command, DeviceError> Device::GetCommandRegisterValue() const
+    Result<Command> Device::GetCommandRegisterValue() const
     {
         return ReadRegister<Command>(RegOffset::Command);
     }
 
-    DeviceError Device::SetDesignCapacity(MicroAmpereHours valueMah)
+    Result<void> Device::SetDesignCapacity(MicroAmpereHours valueMah)
     {
         uint16_t value = valueMah.ToRaw();
         return WriteRegister(RegOffset::DesignCap, value);
     }
 
-    std::expected<MicroAmpereHours, DeviceError> Device::GetDesignCapacity() const
+    Result<MicroAmpereHours> Device::GetDesignCapacity() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::DesignCap);
         if (!valueResult.has_value())
@@ -274,13 +290,13 @@ namespace PiSubmarine::Max17261
         return MicroAmpereHours::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetChargeTerminationCurrent(MicroAmperes valueMa)
+    Result<void> Device::SetChargeTerminationCurrent(MicroAmperes valueMa)
     {
         int16_t value = valueMa.ToRaw();
         return WriteRegister(RegOffset::IChgTerm, value);
     }
 
-    std::expected<MicroAmperes, DeviceError> Device::GetChargeTerminationCurrent() const
+    Result<MicroAmperes> Device::GetChargeTerminationCurrent() const
     {
         auto valueResult = ReadRegister<int16_t>(RegOffset::IChgTerm);
         if (!valueResult.has_value())
@@ -290,13 +306,13 @@ namespace PiSubmarine::Max17261
         return MicroAmperes::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetBatteryEmptyVoltage(MicroVolts valueUv)
+    Result<void> Device::SetBatteryEmptyVoltage(MicroVolts valueUv)
     {
         uint16_t value = valueUv.GetMicroVolts() / 10000;
         return WriteField(RegOffset::VEmpty, 7, 9, value);
     }
 
-    std::expected<MicroVolts, DeviceError> Device::GetBatteryEmptyVoltage() const
+    Result<MicroVolts> Device::GetBatteryEmptyVoltage() const
     {
         auto valueResult = ReadField<uint16_t>(RegOffset::VEmpty, 7, 9);
         if (!valueResult.has_value())
@@ -306,13 +322,13 @@ namespace PiSubmarine::Max17261
         return MicroVolts(valueResult.value() * 10000);
     }
 
-    DeviceError Device::SetBatteryRecoveryVoltage(MicroVolts valueUv)
+    Result<void> Device::SetBatteryRecoveryVoltage(MicroVolts valueUv)
     {
         uint16_t value = valueUv.GetMicroVolts() / 40000;
         return WriteField(RegOffset::VEmpty, 0, 7, value);
     }
 
-    std::expected<MicroVolts, DeviceError> Device::GetBatteryRecoveryVoltage() const
+    Result<MicroVolts> Device::GetBatteryRecoveryVoltage() const
     {
         auto valueResult = ReadField<uint16_t>(RegOffset::VEmpty, 0, 7);
         if (!valueResult.has_value())
@@ -322,17 +338,17 @@ namespace PiSubmarine::Max17261
         return MicroVolts(valueResult.value() * 40000);
     }
 
-    std::expected<ModelId, DeviceError> Device::GetBatteryChemistryModel() const
+    Result<ModelId> Device::GetBatteryChemistryModel() const
     {
         return ReadField<ModelId>(RegOffset::ModelCfg, 4, 4);
     }
 
-    DeviceError Device::SetBatteryChemistryModel(ModelId value)
+    Result<void> Device::SetBatteryChemistryModel(ModelId value)
     {
         return WriteField(RegOffset::ModelCfg, 4, 4, value);
     }
 
-    std::expected<bool, DeviceError> Device::IsHighVoltageChargeProfileEnabled() const
+    Result<bool> Device::IsHighVoltageChargeProfileEnabled() const
     {
         auto valueResult = ReadField<uint8_t>(RegOffset::ModelCfg, 10, 1);
         if (!valueResult.has_value())
@@ -342,12 +358,12 @@ namespace PiSubmarine::Max17261
         return valueResult.value() != 0;
     }
 
-    DeviceError Device::SetHighVoltageChargeProfileEnabled(bool value)
+    Result<void> Device::SetHighVoltageChargeProfileEnabled(bool value)
     {
         return WriteField<uint8_t>(RegOffset::ModelCfg, 10, 1, static_cast<uint8_t>(value));
     }
 
-    std::expected<bool, DeviceError> Device::IsModelRefreshInProgress() const
+    Result<bool> Device::IsModelRefreshInProgress() const
     {
         auto valueResult = ReadField<uint8_t>(RegOffset::ModelCfg, 15, 1);
         if (!valueResult.has_value())
@@ -357,12 +373,12 @@ namespace PiSubmarine::Max17261
         return valueResult.value() != 0;
     }
 
-    DeviceError Device::SetModelRefreshRequested(bool value)
+    Result<void> Device::SetModelRefreshRequested(bool value)
     {
         return WriteField<uint8_t>(RegOffset::ModelCfg, 15, 1, static_cast<uint8_t>(value));
     }
 
-    std::expected<MicroAmpereHours, DeviceError> Device::GetRemainingCapacityEstimate() const
+    Result<MicroAmpereHours> Device::GetRemainingCapacityEstimate() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::RepCap);
         if (!valueResult.has_value())
@@ -372,7 +388,7 @@ namespace PiSubmarine::Max17261
         return MicroAmpereHours::FromRaw(valueResult.value());
     }
 
-    std::expected<MicroAmpereHours, DeviceError> Device::GetReportedFullCapacityEstimate() const
+    Result<MicroAmpereHours> Device::GetReportedFullCapacityEstimate() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::FullCapRep);
         if (!valueResult.has_value())
@@ -382,13 +398,13 @@ namespace PiSubmarine::Max17261
         return MicroAmpereHours::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetReportedFullCapacityEstimate(MicroAmpereHours valueuAh)
+    Result<void> Device::SetReportedFullCapacityEstimate(MicroAmpereHours valueuAh)
     {
         uint16_t value = valueuAh.ToRaw();
         return WriteRegister(RegOffset::FullCapRep, value);
     }
 
-    std::expected<MicroAmpereHours, DeviceError> Device::GetNominalFullCapacityEstimate() const
+    Result<MicroAmpereHours> Device::GetNominalFullCapacityEstimate() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::FullCapNom);
         if (!valueResult.has_value())
@@ -398,13 +414,13 @@ namespace PiSubmarine::Max17261
         return MicroAmpereHours::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetNominalFullCapacityEstimate(MicroAmpereHours cap)
+    Result<void> Device::SetNominalFullCapacityEstimate(MicroAmpereHours cap)
     {
         uint16_t value = cap.ToRaw();
         return WriteRegister(RegOffset::FullCapNom, value);
     }
 
-    std::expected<NormalizedIntFactor, DeviceError> Device::GetRemainingStateOfCharge() const
+    Result<NormalizedIntFactor> Device::GetRemainingStateOfCharge() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::RepSOC);
         if (!valueResult.has_value())
@@ -414,7 +430,7 @@ namespace PiSubmarine::Max17261
         return DecodePercentRegister(valueResult.value());
     }
 
-    std::expected<MicroAmperes, DeviceError> Device::GetInstantCurrent() const
+    Result<MicroAmperes> Device::GetInstantCurrent() const
     {
         auto valueResult = ReadRegister<int16_t>(RegOffset::Current);
         if (!valueResult.has_value())
@@ -424,47 +440,47 @@ namespace PiSubmarine::Max17261
         return MicroAmperes::FromRaw(valueResult.value());
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetTimeToEmptyRaw() const
+    Result<uint16_t> Device::GetTimeToEmptyRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::TTE);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetTimeToFullRaw() const
+    Result<uint16_t> Device::GetTimeToFullRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::TTF);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetCycleCount() const
+    Result<uint16_t> Device::GetCycleCount() const
     {
         return ReadRegister<uint16_t>(RegOffset::Cycles);
     }
 
-    DeviceError Device::SetCycleCount(uint16_t value)
+    Result<void> Device::SetCycleCount(uint16_t value)
     {
         return WriteRegister(RegOffset::Cycles, value);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetTemperatureCompensationBaseline() const
+    Result<uint16_t> Device::GetTemperatureCompensationBaseline() const
     {
         return ReadRegister<uint16_t>(RegOffset::RComp0);
     }
 
-    DeviceError Device::SetTemperatureCompensationBaseline(uint16_t value)
+    Result<void> Device::SetTemperatureCompensationBaseline(uint16_t value)
     {
         return WriteRegister(RegOffset::RComp0, value);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetTemperatureCompensationCoefficient() const
+    Result<uint16_t> Device::GetTemperatureCompensationCoefficient() const
     {
         return ReadRegister<uint16_t>(RegOffset::TempCo);
     }
 
-    DeviceError Device::SetTemperatureCompensationCoefficient(uint16_t value)
+    Result<void> Device::SetTemperatureCompensationCoefficient(uint16_t value)
     {
         return WriteRegister(RegOffset::TempCo, value);
     }
 
-    std::expected<MicroVolts, DeviceError> Device::GetInstantVoltage() const
+    Result<MicroVolts> Device::GetInstantVoltage() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::VCell);
         if (!valueResult.has_value())
@@ -474,820 +490,820 @@ namespace PiSubmarine::Max17261
         return MicroVolts::FromRaw(valueResult.value());
     }
 
-    std::expected<ConfigFlags, DeviceError> Device::GetDeviceConfiguration() const
+    Result<ConfigFlags> Device::GetDeviceConfiguration() const
     {
         return ReadRegister<ConfigFlags>(RegOffset::Config);
     }
 
-    DeviceError Device::SetDeviceConfiguration(ConfigFlags value)
+    Result<void> Device::SetDeviceConfiguration(ConfigFlags value)
     {
         return WriteRegister(RegOffset::Config, value);
     }
 
-    std::expected<AlertThresholdRaw8, DeviceError> Device::GetVoltageAlertThresholdRaw() const
+    Result<AlertThresholdRaw8> Device::GetVoltageAlertThresholdRaw() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::VAlrtTh);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return DecodeAlertThreshold(valueResult.value());
     }
 
-    DeviceError Device::SetVoltageAlertThresholdRaw(const AlertThresholdRaw8& value)
+    Result<void> Device::SetVoltageAlertThresholdRaw(const AlertThresholdRaw8& value)
     {
         return WriteRegister<uint16_t>(RegOffset::VAlrtTh, EncodeAlertThreshold(value));
     }
 
-    std::expected<AlertThresholdRaw8, DeviceError> Device::GetTemperatureAlertThresholdRaw() const
+    Result<AlertThresholdRaw8> Device::GetTemperatureAlertThresholdRaw() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::TAlrtTh);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return DecodeAlertThreshold(valueResult.value());
     }
 
-    DeviceError Device::SetTemperatureAlertThresholdRaw(const AlertThresholdRaw8& value)
+    Result<void> Device::SetTemperatureAlertThresholdRaw(const AlertThresholdRaw8& value)
     {
         return WriteRegister<uint16_t>(RegOffset::TAlrtTh, EncodeAlertThreshold(value));
     }
 
-    std::expected<AlertThresholdRaw8, DeviceError> Device::GetSocAlertThresholdRaw() const
+    Result<AlertThresholdRaw8> Device::GetSocAlertThresholdRaw() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::SAlrtTh);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return DecodeAlertThreshold(valueResult.value());
     }
 
-    DeviceError Device::SetSocAlertThresholdRaw(const AlertThresholdRaw8& value)
+    Result<void> Device::SetSocAlertThresholdRaw(const AlertThresholdRaw8& value)
     {
         return WriteRegister<uint16_t>(RegOffset::SAlrtTh, EncodeAlertThreshold(value));
     }
 
-    std::expected<AlertThresholdRaw8, DeviceError> Device::GetCurrentAlertThresholdRaw() const
+    Result<AlertThresholdRaw8> Device::GetCurrentAlertThresholdRaw() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::IAlrtTh);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return DecodeAlertThreshold(valueResult.value());
     }
 
-    DeviceError Device::SetCurrentAlertThresholdRaw(const AlertThresholdRaw8& value)
+    Result<void> Device::SetCurrentAlertThresholdRaw(const AlertThresholdRaw8& value)
     {
         return WriteRegister<uint16_t>(RegOffset::IAlrtTh, EncodeAlertThreshold(value));
     }
 
-    std::expected<MicroAmperes, DeviceError> Device::GetTheoreticalLoadCurrent() const
+    Result<MicroAmperes> Device::GetTheoreticalLoadCurrent() const
     {
         auto valueResult = ReadRegister<int16_t>(RegOffset::AtRate);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return MicroAmperes::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetTheoreticalLoadCurrent(MicroAmperes value)
+    Result<void> Device::SetTheoreticalLoadCurrent(MicroAmperes value)
     {
         return WriteRegister<int16_t>(RegOffset::AtRate, value.ToRaw());
     }
 
-    std::expected<NormalizedIntFactor, DeviceError> Device::GetAgeEstimate() const
+    Result<NormalizedIntFactor> Device::GetAgeEstimate() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::Age);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return DecodePercentRegister(valueResult.value());
     }
 
-    DeviceError Device::SetAgeEstimate(NormalizedIntFactor value)
+    Result<void> Device::SetAgeEstimate(NormalizedIntFactor value)
     {
         return WriteRegister<uint16_t>(RegOffset::Age, EncodePercentRegister(value));
     }
 
-    std::expected<MilliCelsius, DeviceError> Device::GetBatteryTemperature() const
+    Result<MilliCelsius> Device::GetBatteryTemperature() const
     {
         auto valueResult = ReadRegister<int16_t>(RegOffset::Temp);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return MilliCelsius::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetBatteryTemperature(MilliCelsius value)
+    Result<void> Device::SetBatteryTemperature(MilliCelsius value)
     {
         return WriteRegister<int16_t>(RegOffset::Temp, value.ToRaw());
     }
 
-    std::expected<MicroAmperes, DeviceError> Device::GetAverageCurrent() const
+    Result<MicroAmperes> Device::GetAverageCurrent() const
     {
         auto valueResult = ReadRegister<int16_t>(RegOffset::AvgCurrent);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return MicroAmperes::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetAverageCurrent(MicroAmperes value)
+    Result<void> Device::SetAverageCurrent(MicroAmperes value)
     {
         return WriteRegister<int16_t>(RegOffset::AvgCurrent, value.ToRaw());
     }
 
-    std::expected<CapacityAccumulator, DeviceError> Device::GetResidualCapacityTerm() const
+    Result<CapacityAccumulator> Device::GetResidualCapacityTerm() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::QResidual);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return CapacityAccumulator{valueResult.value()};
     }
 
-    DeviceError Device::SetResidualCapacityTerm(CapacityAccumulator value)
+    Result<void> Device::SetResidualCapacityTerm(CapacityAccumulator value)
     {
         return WriteRegister<uint16_t>(RegOffset::QResidual, value.Raw);
     }
 
-    std::expected<NormalizedIntFactor, DeviceError> Device::GetMixedSoc() const
+    Result<NormalizedIntFactor> Device::GetMixedSoc() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::MixSOC);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return DecodePercentRegister(valueResult.value());
     }
 
-    DeviceError Device::SetMixedSoc(NormalizedIntFactor value)
+    Result<void> Device::SetMixedSoc(NormalizedIntFactor value)
     {
         return WriteRegister<uint16_t>(RegOffset::MixSOC, EncodePercentRegister(value));
     }
 
-    std::expected<NormalizedIntFactor, DeviceError> Device::GetFilteredSoc() const
+    Result<NormalizedIntFactor> Device::GetFilteredSoc() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::AvSOC);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return DecodePercentRegister(valueResult.value());
     }
 
-    DeviceError Device::SetFilteredSoc(NormalizedIntFactor value)
+    Result<void> Device::SetFilteredSoc(NormalizedIntFactor value)
     {
         return WriteRegister<uint16_t>(RegOffset::AvSOC, EncodePercentRegister(value));
     }
 
-    std::expected<MicroAmpereHours, DeviceError> Device::GetMixedCapacityEstimate() const
+    Result<MicroAmpereHours> Device::GetMixedCapacityEstimate() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::MixCap);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return MicroAmpereHours::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetMixedCapacityEstimate(MicroAmpereHours value)
+    Result<void> Device::SetMixedCapacityEstimate(MicroAmpereHours value)
     {
         return WriteRegister<uint16_t>(RegOffset::MixCap, value.ToRaw());
     }
 
-    std::expected<ModelQrParameter, DeviceError> Device::GetModelQrTable00() const
+    Result<ModelQrParameter> Device::GetModelQrTable00() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::QRTable00);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return ModelQrParameter{valueResult.value()};
     }
 
-    DeviceError Device::SetModelQrTable00(ModelQrParameter value)
+    Result<void> Device::SetModelQrTable00(ModelQrParameter value)
     {
         return WriteRegister<uint16_t>(RegOffset::QRTable00, value.Raw);
     }
 
-    std::expected<NormalizedIntFactor, DeviceError> Device::GetFullSocThreshold() const
+    Result<NormalizedIntFactor> Device::GetFullSocThreshold() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::FullSocThr);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return DecodePercentRegister(valueResult.value());
     }
 
-    DeviceError Device::SetFullSocThreshold(NormalizedIntFactor value)
+    Result<void> Device::SetFullSocThreshold(NormalizedIntFactor value)
     {
         return WriteRegister<uint16_t>(RegOffset::FullSocThr, EncodePercentRegister(value));
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetCellResistanceRaw() const
+    Result<uint16_t> Device::GetCellResistanceRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::RCell);
     }
 
-    DeviceError Device::SetCellResistanceRaw(uint16_t value)
+    Result<void> Device::SetCellResistanceRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::RCell, value);
     }
 
-    std::expected<MilliCelsius, DeviceError> Device::GetAverageTemperature() const
+    Result<MilliCelsius> Device::GetAverageTemperature() const
     {
         auto valueResult = ReadRegister<int16_t>(RegOffset::AvgTA);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return MilliCelsius::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetAverageTemperature(MilliCelsius value)
+    Result<void> Device::SetAverageTemperature(MilliCelsius value)
     {
         return WriteRegister<int16_t>(RegOffset::AvgTA, value.ToRaw());
     }
 
-    std::expected<MicroVolts, DeviceError> Device::GetAverageVoltage() const
+    Result<MicroVolts> Device::GetAverageVoltage() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::AvgVCell);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return MicroVolts::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetAverageVoltage(MicroVolts value)
+    Result<void> Device::SetAverageVoltage(MicroVolts value)
     {
         return WriteRegister<uint16_t>(RegOffset::AvgVCell, value.ToRaw());
     }
 
-    std::expected<MinMaxRaw8, DeviceError> Device::GetTemperatureMinMaxRaw() const
+    Result<MinMaxRaw8> Device::GetTemperatureMinMaxRaw() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::MaxMinTemp);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return DecodeMinMax(valueResult.value());
     }
 
-    DeviceError Device::SetTemperatureMinMaxRaw(const MinMaxRaw8& value)
+    Result<void> Device::SetTemperatureMinMaxRaw(const MinMaxRaw8& value)
     {
         return WriteRegister<uint16_t>(RegOffset::MaxMinTemp, EncodeMinMax(value));
     }
 
-    std::expected<MinMaxRaw8, DeviceError> Device::GetVoltageMinMaxRaw() const
+    Result<MinMaxRaw8> Device::GetVoltageMinMaxRaw() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::MaxMinVolt);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return DecodeMinMax(valueResult.value());
     }
 
-    DeviceError Device::SetVoltageMinMaxRaw(const MinMaxRaw8& value)
+    Result<void> Device::SetVoltageMinMaxRaw(const MinMaxRaw8& value)
     {
         return WriteRegister<uint16_t>(RegOffset::MaxMinVolt, EncodeMinMax(value));
     }
 
-    std::expected<MinMaxRaw8, DeviceError> Device::GetCurrentMinMaxRaw() const
+    Result<MinMaxRaw8> Device::GetCurrentMinMaxRaw() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::MaxMinCurr);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return DecodeMinMax(valueResult.value());
     }
 
-    DeviceError Device::SetCurrentMinMaxRaw(const MinMaxRaw8& value)
+    Result<void> Device::SetCurrentMinMaxRaw(const MinMaxRaw8& value)
     {
         return WriteRegister<uint16_t>(RegOffset::MaxMinCurr, EncodeMinMax(value));
     }
 
-    std::expected<MicroAmpereHours, DeviceError> Device::GetFilteredAvailableCapacityEstimate() const
+    Result<MicroAmpereHours> Device::GetFilteredAvailableCapacityEstimate() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::AvCap);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return MicroAmpereHours::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetFilteredAvailableCapacityEstimate(MicroAmpereHours value)
+    Result<void> Device::SetFilteredAvailableCapacityEstimate(MicroAmpereHours value)
     {
         return WriteRegister<uint16_t>(RegOffset::AvCap, value.ToRaw());
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetDeviceNameCode() const
+    Result<uint16_t> Device::GetDeviceNameCode() const
     {
         return ReadRegister<uint16_t>(RegOffset::DevName);
     }
 
-    std::expected<ModelQrParameter, DeviceError> Device::GetModelQrTable10() const
+    Result<ModelQrParameter> Device::GetModelQrTable10() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::QRTable10);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return ModelQrParameter{valueResult.value()};
     }
 
-    DeviceError Device::SetModelQrTable10(ModelQrParameter value)
+    Result<void> Device::SetModelQrTable10(ModelQrParameter value)
     {
         return WriteRegister<uint16_t>(RegOffset::QRTable10, value.Raw);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetAuxInputRaw() const
+    Result<uint16_t> Device::GetAuxInputRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::AIN);
     }
 
-    DeviceError Device::SetAuxInputRaw(uint16_t value)
+    Result<void> Device::SetAuxInputRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::AIN, value);
     }
 
-    std::expected<LearnConfiguration, DeviceError> Device::GetLearnConfiguration() const
+    Result<LearnConfiguration> Device::GetLearnConfiguration() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::LearnCfg);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return LearnConfiguration{valueResult.value()};
     }
 
-    DeviceError Device::SetLearnConfiguration(LearnConfiguration value)
+    Result<void> Device::SetLearnConfiguration(LearnConfiguration value)
     {
         return WriteRegister<uint16_t>(RegOffset::LearnCfg, value.Raw);
     }
 
-    std::expected<FilterConfiguration, DeviceError> Device::GetFilterConfiguration() const
+    Result<FilterConfiguration> Device::GetFilterConfiguration() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::FilterCfg);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return FilterConfiguration{valueResult.value()};
     }
 
-    DeviceError Device::SetFilterConfiguration(FilterConfiguration value)
+    Result<void> Device::SetFilterConfiguration(FilterConfiguration value)
     {
         return WriteRegister<uint16_t>(RegOffset::FilterCfg, value.Raw);
     }
 
-    std::expected<RelaxConfiguration, DeviceError> Device::GetRelaxConfiguration() const
+    Result<RelaxConfiguration> Device::GetRelaxConfiguration() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::RelaxCfg);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return RelaxConfiguration{valueResult.value()};
     }
 
-    DeviceError Device::SetRelaxConfiguration(RelaxConfiguration value)
+    Result<void> Device::SetRelaxConfiguration(RelaxConfiguration value)
     {
         return WriteRegister<uint16_t>(RegOffset::RelaxCfg, value.Raw);
     }
 
-    std::expected<MiscConfiguration, DeviceError> Device::GetMiscConfiguration() const
+    Result<MiscConfiguration> Device::GetMiscConfiguration() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::MiscCfg);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return MiscConfiguration{valueResult.value()};
     }
 
-    DeviceError Device::SetMiscConfiguration(MiscConfiguration value)
+    Result<void> Device::SetMiscConfiguration(MiscConfiguration value)
     {
         return WriteRegister<uint16_t>(RegOffset::MiscCfg, value.Raw);
     }
 
-    std::expected<TemperatureGain, DeviceError> Device::GetTemperatureGain() const
+    Result<TemperatureGain> Device::GetTemperatureGain() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::TGain);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return TemperatureGain{valueResult.value()};
     }
 
-    DeviceError Device::SetTemperatureGain(TemperatureGain value)
+    Result<void> Device::SetTemperatureGain(TemperatureGain value)
     {
         return WriteRegister<uint16_t>(RegOffset::TGain, value.Raw);
     }
 
-    std::expected<TemperatureOffset, DeviceError> Device::GetTemperatureOffset() const
+    Result<TemperatureOffset> Device::GetTemperatureOffset() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::TOff);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return TemperatureOffset{valueResult.value()};
     }
 
-    DeviceError Device::SetTemperatureOffset(TemperatureOffset value)
+    Result<void> Device::SetTemperatureOffset(TemperatureOffset value)
     {
         return WriteRegister<uint16_t>(RegOffset::TOff, value.Raw);
     }
 
-    std::expected<CurrentGain, DeviceError> Device::GetCurrentGain() const
+    Result<CurrentGain> Device::GetCurrentGain() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::CGain);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return CurrentGain{valueResult.value()};
     }
 
-    DeviceError Device::SetCurrentGain(CurrentGain value)
+    Result<void> Device::SetCurrentGain(CurrentGain value)
     {
         return WriteRegister<uint16_t>(RegOffset::CGain, value.Raw);
     }
 
-    std::expected<CurrentOffset, DeviceError> Device::GetCurrentOffset() const
+    Result<CurrentOffset> Device::GetCurrentOffset() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::COff);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return CurrentOffset{valueResult.value()};
     }
 
-    DeviceError Device::SetCurrentOffset(CurrentOffset value)
+    Result<void> Device::SetCurrentOffset(CurrentOffset value)
     {
         return WriteRegister<uint16_t>(RegOffset::COff, value.Raw);
     }
 
-    std::expected<ModelQrParameter, DeviceError> Device::GetModelQrTable20() const
+    Result<ModelQrParameter> Device::GetModelQrTable20() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::QRTable20);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return ModelQrParameter{valueResult.value()};
     }
 
-    DeviceError Device::SetModelQrTable20(ModelQrParameter value)
+    Result<void> Device::SetModelQrTable20(ModelQrParameter value)
     {
         return WriteRegister<uint16_t>(RegOffset::QRTable20, value.Raw);
     }
 
-    std::expected<MilliCelsius, DeviceError> Device::GetDieTemperature() const
+    Result<MilliCelsius> Device::GetDieTemperature() const
     {
         auto valueResult = ReadRegister<int16_t>(RegOffset::DieTemp);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return MilliCelsius::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetDieTemperature(MilliCelsius value)
+    Result<void> Device::SetDieTemperature(MilliCelsius value)
     {
         return WriteRegister<int16_t>(RegOffset::DieTemp, value.ToRaw());
     }
 
-    std::expected<MicroAmpereHours, DeviceError> Device::GetLearnedFullCapacity() const
+    Result<MicroAmpereHours> Device::GetLearnedFullCapacity() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::FullCap);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return MicroAmpereHours::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetLearnedFullCapacity(MicroAmpereHours value)
+    Result<void> Device::SetLearnedFullCapacity(MicroAmpereHours value)
     {
         return WriteRegister<uint16_t>(RegOffset::FullCap, value.ToRaw());
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetTimerLowWord() const
+    Result<uint16_t> Device::GetTimerLowWord() const
     {
         return ReadRegister<uint16_t>(RegOffset::Timer);
     }
 
-    DeviceError Device::SetTimerLowWord(uint16_t value)
+    Result<void> Device::SetTimerLowWord(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::Timer, value);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetShutdownTimerRaw() const
+    Result<uint16_t> Device::GetShutdownTimerRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::ShdnTimer);
     }
 
-    DeviceError Device::SetShutdownTimerRaw(uint16_t value)
+    Result<void> Device::SetShutdownTimerRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::ShdnTimer, value);
     }
 
-    std::expected<ModelQrParameter, DeviceError> Device::GetModelQrTable30() const
+    Result<ModelQrParameter> Device::GetModelQrTable30() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::QRTable30);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return ModelQrParameter{valueResult.value()};
     }
 
-    DeviceError Device::SetModelQrTable30(ModelQrParameter value)
+    Result<void> Device::SetModelQrTable30(ModelQrParameter value)
     {
         return WriteRegister<uint16_t>(RegOffset::QRTable30, value.Raw);
     }
 
-    std::expected<ResistanceGain, DeviceError> Device::GetResistanceGain() const
+    Result<ResistanceGain> Device::GetResistanceGain() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::RGain);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return ResistanceGain{valueResult.value()};
     }
 
-    DeviceError Device::SetResistanceGain(ResistanceGain value)
+    Result<void> Device::SetResistanceGain(ResistanceGain value)
     {
         return WriteRegister<uint16_t>(RegOffset::RGain, value.Raw);
     }
 
-    std::expected<CapacityAccumulator, DeviceError> Device::GetCapacityAccumulator() const
+    Result<CapacityAccumulator> Device::GetCapacityAccumulator() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::dQAcc);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return CapacityAccumulator{valueResult.value()};
     }
 
-    DeviceError Device::SetCapacityAccumulator(CapacityAccumulator value)
+    Result<void> Device::SetCapacityAccumulator(CapacityAccumulator value)
     {
         return WriteRegister<uint16_t>(RegOffset::dQAcc, value.Raw);
     }
 
-    std::expected<PowerAccumulator, DeviceError> Device::GetPowerAccumulator() const
+    Result<PowerAccumulator> Device::GetPowerAccumulator() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::dPAcc);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return PowerAccumulator{valueResult.value()};
     }
 
-    DeviceError Device::SetPowerAccumulator(PowerAccumulator value)
+    Result<void> Device::SetPowerAccumulator(PowerAccumulator value)
     {
         return WriteRegister<uint16_t>(RegOffset::dPAcc, value.Raw);
     }
 
-    std::expected<ConvergenceConfiguration, DeviceError> Device::GetConvergenceConfiguration() const
+    Result<ConvergenceConfiguration> Device::GetConvergenceConfiguration() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::ConvgCfg);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return ConvergenceConfiguration{valueResult.value()};
     }
 
-    DeviceError Device::SetConvergenceConfiguration(ConvergenceConfiguration value)
+    Result<void> Device::SetConvergenceConfiguration(ConvergenceConfiguration value)
     {
         return WriteRegister<uint16_t>(RegOffset::ConvgCfg, value.Raw);
     }
 
-    std::expected<MicroAmpereHours, DeviceError> Device::GetVoltageFilteredRemainingCapacity() const
+    Result<MicroAmpereHours> Device::GetVoltageFilteredRemainingCapacity() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::VFRemCap);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return MicroAmpereHours::FromRaw(valueResult.value());
     }
 
-    DeviceError Device::SetVoltageFilteredRemainingCapacity(MicroAmpereHours value)
+    Result<void> Device::SetVoltageFilteredRemainingCapacity(MicroAmpereHours value)
     {
         return WriteRegister<uint16_t>(RegOffset::VFRemCap, value.ToRaw());
     }
 
-    std::expected<ChargeAccumulator, DeviceError> Device::GetChargeAccumulator() const
+    Result<ChargeAccumulator> Device::GetChargeAccumulator() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::QH);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return ChargeAccumulator{valueResult.value()};
     }
 
-    DeviceError Device::SetChargeAccumulator(ChargeAccumulator value)
+    Result<void> Device::SetChargeAccumulator(ChargeAccumulator value)
     {
         return WriteRegister<uint16_t>(RegOffset::QH, value.Raw);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetStatus2Raw() const
+    Result<uint16_t> Device::GetStatus2Raw() const
     {
         return ReadRegister<uint16_t>(RegOffset::Status2);
     }
 
-    DeviceError Device::SetStatus2Raw(uint16_t value) { return WriteRegister<uint16_t>(RegOffset::Status2, value); }
+    Result<void> Device::SetStatus2Raw(uint16_t value) { return WriteRegister<uint16_t>(RegOffset::Status2, value); }
 
-    std::expected<uint16_t, DeviceError> Device::GetInstantPowerRaw() const
+    Result<uint16_t> Device::GetInstantPowerRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::Power);
     }
 
-    DeviceError Device::SetInstantPowerRaw(uint16_t value) { return WriteRegister<uint16_t>(RegOffset::Power, value); }
+    Result<void> Device::SetInstantPowerRaw(uint16_t value) { return WriteRegister<uint16_t>(RegOffset::Power, value); }
 
-    std::expected<uint16_t, DeviceError> Device::GetDeviceIdOrUserMem2() const
+    Result<uint16_t> Device::GetDeviceIdOrUserMem2() const
     {
         return ReadRegister<uint16_t>(RegOffset::ID);
     }
 
-    DeviceError Device::SetUserMem2(uint16_t value) { return WriteRegister<uint16_t>(RegOffset::ID, value); }
+    Result<void> Device::SetUserMem2(uint16_t value) { return WriteRegister<uint16_t>(RegOffset::ID, value); }
 
-    std::expected<uint16_t, DeviceError> Device::GetAveragePowerRaw() const
+    Result<uint16_t> Device::GetAveragePowerRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::AvgPower);
     }
 
-    DeviceError Device::SetAveragePowerRaw(uint16_t value)
+    Result<void> Device::SetAveragePowerRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::AvgPower, value);
     }
 
-    std::expected<TimeToFullConfiguration, DeviceError> Device::GetTimeToFullConfiguration() const
+    Result<TimeToFullConfiguration> Device::GetTimeToFullConfiguration() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::TTFCfg);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return TimeToFullConfiguration{valueResult.value()};
     }
 
-    DeviceError Device::SetTimeToFullConfiguration(TimeToFullConfiguration value)
+    Result<void> Device::SetTimeToFullConfiguration(TimeToFullConfiguration value)
     {
         return WriteRegister<uint16_t>(RegOffset::TTFCfg, value.Raw);
     }
 
-    std::expected<CvMixedCapacityParameter, DeviceError> Device::GetCvMixedCapacity() const
+    Result<CvMixedCapacityParameter> Device::GetCvMixedCapacity() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::CVMixCap);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return CvMixedCapacityParameter{valueResult.value()};
     }
 
-    DeviceError Device::SetCvMixedCapacity(CvMixedCapacityParameter value)
+    Result<void> Device::SetCvMixedCapacity(CvMixedCapacityParameter value)
     {
         return WriteRegister<uint16_t>(RegOffset::CVMixCap, value.Raw);
     }
 
-    std::expected<CvHalfTimeParameter, DeviceError> Device::GetCvHalfTime() const
+    Result<CvHalfTimeParameter> Device::GetCvHalfTime() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::CVHalfTime);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return CvHalfTimeParameter{valueResult.value()};
     }
 
-    DeviceError Device::SetCvHalfTime(CvHalfTimeParameter value)
+    Result<void> Device::SetCvHalfTime(CvHalfTimeParameter value)
     {
         return WriteRegister<uint16_t>(RegOffset::CVHalfTime, value.Raw);
     }
 
-    std::expected<ChargeGainTemperatureCoefficient, DeviceError> Device::GetChargeGainTemperatureCoefficient() const
+    Result<ChargeGainTemperatureCoefficient> Device::GetChargeGainTemperatureCoefficient() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::CGTempCo);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return ChargeGainTemperatureCoefficient{valueResult.value()};
     }
 
-    DeviceError Device::SetChargeGainTemperatureCoefficient(ChargeGainTemperatureCoefficient value)
+    Result<void> Device::SetChargeGainTemperatureCoefficient(ChargeGainTemperatureCoefficient value)
     {
         return WriteRegister<uint16_t>(RegOffset::CGTempCo, value.Raw);
     }
 
-    std::expected<PowerCurveConfiguration, DeviceError> Device::GetPowerCurveConfiguration() const
+    Result<PowerCurveConfiguration> Device::GetPowerCurveConfiguration() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::Curve);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return PowerCurveConfiguration{valueResult.value()};
     }
 
-    DeviceError Device::SetPowerCurveConfiguration(PowerCurveConfiguration value)
+    Result<void> Device::SetPowerCurveConfiguration(PowerCurveConfiguration value)
     {
         return WriteRegister<uint16_t>(RegOffset::Curve, value.Raw);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetExtendedConfigurationRaw() const
+    Result<uint16_t> Device::GetExtendedConfigurationRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::Config2);
     }
 
-    DeviceError Device::SetExtendedConfigurationRaw(uint16_t value)
+    Result<void> Device::SetExtendedConfigurationRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::Config2, value);
     }
 
-    std::expected<VoltageRippleMeasurement, DeviceError> Device::GetVoltageRippleRaw() const
+    Result<VoltageRippleMeasurement> Device::GetVoltageRippleRaw() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::VRipple);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return VoltageRippleMeasurement{valueResult.value()};
     }
 
-    DeviceError Device::SetVoltageRippleRaw(VoltageRippleMeasurement value)
+    Result<void> Device::SetVoltageRippleRaw(VoltageRippleMeasurement value)
     {
         return WriteRegister<uint16_t>(RegOffset::VRipple, value.Raw);
     }
 
-    std::expected<RippleConfiguration, DeviceError> Device::GetRippleConfiguration() const
+    Result<RippleConfiguration> Device::GetRippleConfiguration() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::RippleCfg);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return RippleConfiguration{valueResult.value()};
     }
 
-    DeviceError Device::SetRippleConfiguration(RippleConfiguration value)
+    Result<void> Device::SetRippleConfiguration(RippleConfiguration value)
     {
         return WriteRegister<uint16_t>(RegOffset::RippleCfg, value.Raw);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetTimerHighWord() const
+    Result<uint16_t> Device::GetTimerHighWord() const
     {
         return ReadRegister<uint16_t>(RegOffset::TimerH);
     }
 
-    DeviceError Device::SetTimerHighWord(uint16_t value) { return WriteRegister<uint16_t>(RegOffset::TimerH, value); }
+    Result<void> Device::SetTimerHighWord(uint16_t value) { return WriteRegister<uint16_t>(RegOffset::TimerH, value); }
 
-    std::expected<uint16_t, DeviceError> Device::GetSenseResistorOrUserMem3Raw() const
+    Result<uint16_t> Device::GetSenseResistorOrUserMem3Raw() const
     {
         return ReadRegister<uint16_t>(RegOffset::RSense);
     }
 
-    DeviceError Device::SetSenseResistorOrUserMem3Raw(uint16_t value)
+    Result<void> Device::SetSenseResistorOrUserMem3Raw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::RSense, value);
     }
 
-    std::expected<SocOcvLimitConfiguration, DeviceError> Device::GetSocOcvLimitConfiguration() const
+    Result<SocOcvLimitConfiguration> Device::GetSocOcvLimitConfiguration() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::ScOcvLim);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return SocOcvLimitConfiguration{valueResult.value()};
     }
 
-    DeviceError Device::SetSocOcvLimitConfiguration(SocOcvLimitConfiguration value)
+    Result<void> Device::SetSocOcvLimitConfiguration(SocOcvLimitConfiguration value)
     {
         return WriteRegister<uint16_t>(RegOffset::ScOcvLim, value.Raw);
     }
 
-    std::expected<VoltageGainCalibration, DeviceError> Device::GetVoltageGain() const
+    Result<VoltageGainCalibration> Device::GetVoltageGain() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::VGain);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return VoltageGainCalibration{valueResult.value()};
     }
 
-    DeviceError Device::SetVoltageGain(VoltageGainCalibration value)
+    Result<void> Device::SetVoltageGain(VoltageGainCalibration value)
     {
         return WriteRegister<uint16_t>(RegOffset::VGain, value.Raw);
     }
 
-    std::expected<SocHoldConfiguration, DeviceError> Device::GetSocHoldConfiguration() const
+    Result<SocHoldConfiguration> Device::GetSocHoldConfiguration() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::SOCHold);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return SocHoldConfiguration{valueResult.value()};
     }
 
-    DeviceError Device::SetSocHoldConfiguration(SocHoldConfiguration value)
+    Result<void> Device::SetSocHoldConfiguration(SocHoldConfiguration value)
     {
         return WriteRegister<uint16_t>(RegOffset::SOCHold, value.Raw);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetMaximumPeakPowerRaw() const
+    Result<uint16_t> Device::GetMaximumPeakPowerRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::MaxPeakPower);
     }
 
-    DeviceError Device::SetMaximumPeakPowerRaw(uint16_t value)
+    Result<void> Device::SetMaximumPeakPowerRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::MaxPeakPower, value);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetSustainedPeakPowerRaw() const
+    Result<uint16_t> Device::GetSustainedPeakPowerRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::SusPeakPower);
     }
 
-    DeviceError Device::SetSustainedPeakPowerRaw(uint16_t value)
+    Result<void> Device::SetSustainedPeakPowerRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::SusPeakPower, value);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetPackResistanceRaw() const
+    Result<uint16_t> Device::GetPackResistanceRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::PackResistance);
     }
 
-    DeviceError Device::SetPackResistanceRaw(uint16_t value)
+    Result<void> Device::SetPackResistanceRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::PackResistance, value);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetSystemResistanceRaw() const
+    Result<uint16_t> Device::GetSystemResistanceRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::SysResistance);
     }
 
-    DeviceError Device::SetSystemResistanceRaw(uint16_t value)
+    Result<void> Device::SetSystemResistanceRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::SysResistance, value);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetMinimumSystemVoltageRaw() const
+    Result<uint16_t> Device::GetMinimumSystemVoltageRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::MinSysVoltage);
     }
 
-    DeviceError Device::SetMinimumSystemVoltageRaw(uint16_t value)
+    Result<void> Device::SetMinimumSystemVoltageRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::MinSysVoltage, value);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetMaximumPeakPowerCurrentRaw() const
+    Result<uint16_t> Device::GetMaximumPeakPowerCurrentRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::MPPCurrent);
     }
 
-    DeviceError Device::SetMaximumPeakPowerCurrentRaw(uint16_t value)
+    Result<void> Device::SetMaximumPeakPowerCurrentRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::MPPCurrent, value);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetSustainedPeakPowerCurrentRaw() const
+    Result<uint16_t> Device::GetSustainedPeakPowerCurrentRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::SPPCurrent);
     }
 
-    DeviceError Device::SetSustainedPeakPowerCurrentRaw(uint16_t value)
+    Result<void> Device::SetSustainedPeakPowerCurrentRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::SPPCurrent, value);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetAtRateResidualCapacityRaw() const
+    Result<uint16_t> Device::GetAtRateResidualCapacityRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::AtQResidual);
     }
 
-    DeviceError Device::SetAtRateResidualCapacityRaw(uint16_t value)
+    Result<void> Device::SetAtRateResidualCapacityRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::AtQResidual, value);
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetAtRateTimeToEmptyRaw() const
+    Result<uint16_t> Device::GetAtRateTimeToEmptyRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::AtTTE);
     }
 
-    DeviceError Device::SetAtRateTimeToEmptyRaw(uint16_t value)
+    Result<void> Device::SetAtRateTimeToEmptyRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::AtTTE, value);
     }
 
-    std::expected<NormalizedIntFactor, DeviceError> Device::GetAtRateAverageSoc() const
+    Result<NormalizedIntFactor> Device::GetAtRateAverageSoc() const
     {
         auto valueResult = ReadRegister<uint16_t>(RegOffset::AtAvSOC);
         if (!valueResult.has_value()) return std::unexpected(valueResult.error());
         return DecodePercentRegister(valueResult.value());
     }
 
-    DeviceError Device::SetAtRateAverageSoc(NormalizedIntFactor value)
+    Result<void> Device::SetAtRateAverageSoc(NormalizedIntFactor value)
     {
         return WriteRegister<uint16_t>(RegOffset::AtAvSOC, EncodePercentRegister(value));
     }
 
-    std::expected<uint16_t, DeviceError> Device::GetAtRateAverageCapacityRaw() const
+    Result<uint16_t> Device::GetAtRateAverageCapacityRaw() const
     {
         return ReadRegister<uint16_t>(RegOffset::AtAvCap);
     }
 
-    DeviceError Device::SetAtRateAverageCapacityRaw(uint16_t value)
+    Result<void> Device::SetAtRateAverageCapacityRaw(uint16_t value)
     {
         return WriteRegister<uint16_t>(RegOffset::AtAvCap, value);
     }
 
-    std::expected<AlgorithmLearningParameters, DeviceError> Device::GetAlgorithmLearningParameters() const
+    Result<AlgorithmLearningParameters> Device::GetAlgorithmLearningParameters() const
     {
         AlgorithmLearningParameters p{};
 
@@ -1330,42 +1346,36 @@ namespace PiSubmarine::Max17261
         return p;
     }
 
-    DeviceError Device::SetAlgorithmLearningParameters(const AlgorithmLearningParameters& value)
-    {
-        DeviceError error = DeviceError::None;
-        if (error = SetLearnConfiguration(value.LearningConfig); error != DeviceError::None) return error;
-        if (error = SetFilterConfiguration(value.FilterConfig); error != DeviceError::None) return error;
-        if (error = SetRelaxConfiguration(value.RelaxConfig); error != DeviceError::None) return error;
-        if (error = SetMiscConfiguration(value.MiscConfig); error != DeviceError::None) return error;
-        if (error = SetTemperatureGain(value.TempGain); error != DeviceError::None) return error;
-        if (error = SetTemperatureOffset(value.TempOffset); error != DeviceError::None) return error;
-        if (error = SetCurrentGain(value.ChargeCurrentGain); error != DeviceError::None) return error;
-        if (error = SetCurrentOffset(value.ChargeCurrentOffset); error != DeviceError::None) return error;
-        if (error = SetTemperatureCompensationBaseline(value.TemperatureCompensationBaselineRaw); error !=
-            DeviceError::None) return error;
-        if (error = SetTemperatureCompensationCoefficient(value.TemperatureCompensationCoefficientRaw); error !=
-            DeviceError::None) return error;
-        if (error = SetCapacityAccumulator(value.CapacityDeltaAccumulator); error != DeviceError::None) return error;
-        if (error = SetPowerAccumulator(value.PowerDeltaAccumulator); error != DeviceError::None) return error;
-        return DeviceError::None;
-    }
+	Result<void> Device::SetAlgorithmLearningParameters(const AlgorithmLearningParameters& value)
+	{
+		if (auto result = SetLearnConfiguration(value.LearningConfig); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetFilterConfiguration(value.FilterConfig); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetRelaxConfiguration(value.RelaxConfig); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetMiscConfiguration(value.MiscConfig); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetTemperatureGain(value.TempGain); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetTemperatureOffset(value.TempOffset); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetCurrentGain(value.ChargeCurrentGain); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetCurrentOffset(value.ChargeCurrentOffset); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetTemperatureCompensationBaseline(value.TemperatureCompensationBaselineRaw); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetTemperatureCompensationCoefficient(value.TemperatureCompensationCoefficientRaw); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetCapacityAccumulator(value.CapacityDeltaAccumulator); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetPowerAccumulator(value.PowerDeltaAccumulator); !result.has_value()) return std::unexpected(result.error());
+		return {};
+	}
 
-    DeviceError Device::ReadRegisterRaw(RegOffset reg, uint8_t outData[2]) const
-    {
-        auto offset = static_cast<uint8_t>(reg);
-        const bool ok = m_Driver.WriteRead(Address, &offset, 1, outData, 2);
-        auto error = ok ? DeviceError::None : DeviceError::WriteReadFailed;
-        return error;
-    }
+	Result<void> Device::ReadRegisterRaw(RegOffset reg, uint8_t outData[2]) const
+	{
+		auto offset = static_cast<uint8_t>(reg);
+		return m_Driver.WriteRead(Address, std::span<const uint8_t>(&offset, 1), std::span<uint8_t>(outData, 2));
+	}
 
-    DeviceError Device::WriteRegisterRaw(RegOffset reg, const uint8_t data[2])
-    {
-        uint8_t txData[3];
-        txData[0] = static_cast<uint8_t>(reg);
-        txData[1] = data[0];
-        txData[2] = data[1];
-        const bool ok = m_Driver.Write(Address, txData, sizeof(txData));
-        auto error = ok ? DeviceError::None : DeviceError::WriteFailed;
-        return error;
-    }
+	Result<void> Device::WriteRegisterRaw(RegOffset reg, const uint8_t data[2])
+	{
+		uint8_t txData[3];
+		txData[0] = static_cast<uint8_t>(reg);
+		txData[1] = data[0];
+		txData[2] = data[1];
+		return m_Driver.Write(Address, std::span<const uint8_t>(txData, sizeof(txData)));
+	}
 }
+
