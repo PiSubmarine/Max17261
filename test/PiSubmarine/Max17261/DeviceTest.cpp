@@ -107,6 +107,9 @@ namespace PiSubmarine::Max17261
 		original.TemperatureCompensationCoefficientRaw = 0xAAAA;
 		original.CapacityDeltaAccumulator.Raw = 0xBBBB;
 		original.PowerDeltaAccumulator.Raw = 0xCCCC;
+		original.ReportedFullCapacity = MicroAmpereHours::FromRaw(0x1234);
+		original.NominalFullCapacity = MicroAmpereHours::FromRaw(0x2345);
+		original.CycleCount = 0x3456;
 
 		auto bytes = original.Serialize();
 		auto restored = AlgorithmLearningParameters::Deserialize(bytes);
@@ -123,6 +126,9 @@ namespace PiSubmarine::Max17261
 		EXPECT_EQ(restored.TemperatureCompensationCoefficientRaw, 0xAAAA);
 		EXPECT_EQ(restored.CapacityDeltaAccumulator.Raw, 0xBBBB);
 		EXPECT_EQ(restored.PowerDeltaAccumulator.Raw, 0xCCCC);
+		EXPECT_EQ(restored.ReportedFullCapacity.ToRaw(), 0x1234);
+		EXPECT_EQ(restored.NominalFullCapacity.ToRaw(), 0x2345);
+		EXPECT_EQ(restored.CycleCount, 0x3456);
 	}
 
 	TEST(DeviceTest, AlgorithmLearningParametersSetWritesAllRegisters)
@@ -142,8 +148,11 @@ namespace PiSubmarine::Max17261
 		p.TemperatureCompensationCoefficientRaw = 10;
 		p.CapacityDeltaAccumulator.Raw = 11;
 		p.PowerDeltaAccumulator.Raw = 12;
+		p.ReportedFullCapacity = MicroAmpereHours::FromRaw(13);
+		p.NominalFullCapacity = MicroAmpereHours::FromRaw(14);
+		p.CycleCount = 15;
 
-		EXPECT_CALL(driver, Write(Device::Address, _)).Times(12).WillRepeatedly(Return(PiSubmarine::Error::Api::Result<void>{}));
+		EXPECT_CALL(driver, Write(Device::Address, _)).Times(15).WillRepeatedly(Return(PiSubmarine::Error::Api::Result<void>{}));
 
 		auto result = device.SetAlgorithmLearningParameters(p);
 		EXPECT_TRUE(result.has_value());
@@ -155,7 +164,7 @@ namespace PiSubmarine::Max17261
 		Device device(driver);
 
 		EXPECT_CALL(driver, WriteRead(Device::Address, _, _))
-			.Times(12)
+			.Times(15)
 			.WillRepeatedly(Invoke([](uint8_t, std::span<const uint8_t> tx, std::span<uint8_t> rx)
 			{
 				const uint16_t value = static_cast<uint16_t>(tx[0]) * 3u;
@@ -168,6 +177,9 @@ namespace PiSubmarine::Max17261
 		ASSERT_TRUE(result.has_value());
 		EXPECT_EQ(result->LearningConfig.Raw, static_cast<uint16_t>(static_cast<uint8_t>(RegOffset::LearnCfg) * 3u));
 		EXPECT_EQ(result->PowerDeltaAccumulator.Raw, static_cast<uint16_t>(static_cast<uint8_t>(RegOffset::dPAcc) * 3u));
+		EXPECT_EQ(result->ReportedFullCapacity.ToRaw(), static_cast<uint16_t>(static_cast<uint8_t>(RegOffset::FullCapRep) * 3u));
+		EXPECT_EQ(result->NominalFullCapacity.ToRaw(), static_cast<uint16_t>(static_cast<uint8_t>(RegOffset::FullCapNom) * 3u));
+		EXPECT_EQ(result->CycleCount, static_cast<uint16_t>(static_cast<uint8_t>(RegOffset::Cycles) * 3u));
 	}
 }
 

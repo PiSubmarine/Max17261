@@ -1343,6 +1343,15 @@ namespace PiSubmarine::Max17261
         auto dPAcc = GetPowerAccumulator();
         if (!dPAcc.has_value()) return std::unexpected(dPAcc.error());
         p.PowerDeltaAccumulator = dPAcc.value();
+        auto fullCapRep = GetReportedFullCapacityEstimate();
+        if (!fullCapRep.has_value()) return std::unexpected(fullCapRep.error());
+        p.ReportedFullCapacity = fullCapRep.value();
+        auto fullCapNom = GetNominalFullCapacityEstimate();
+        if (!fullCapNom.has_value()) return std::unexpected(fullCapNom.error());
+        p.NominalFullCapacity = fullCapNom.value();
+        auto cycles = GetCycleCount();
+        if (!cycles.has_value()) return std::unexpected(cycles.error());
+        p.CycleCount = cycles.value();
         return p;
     }
 
@@ -1360,6 +1369,9 @@ namespace PiSubmarine::Max17261
 		if (auto result = SetTemperatureCompensationCoefficient(value.TemperatureCompensationCoefficientRaw); !result.has_value()) return std::unexpected(result.error());
 		if (auto result = SetCapacityAccumulator(value.CapacityDeltaAccumulator); !result.has_value()) return std::unexpected(result.error());
 		if (auto result = SetPowerAccumulator(value.PowerDeltaAccumulator); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetReportedFullCapacityEstimate(value.ReportedFullCapacity); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetNominalFullCapacityEstimate(value.NominalFullCapacity); !result.has_value()) return std::unexpected(result.error());
+		if (auto result = SetCycleCount(value.CycleCount); !result.has_value()) return std::unexpected(result.error());
 		return {};
 	}
 

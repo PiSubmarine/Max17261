@@ -231,8 +231,11 @@ namespace PiSubmarine::Max17261
 		uint16_t TemperatureCompensationCoefficientRaw = 0;
 		CapacityAccumulator CapacityDeltaAccumulator{};
 		PowerAccumulator PowerDeltaAccumulator{};
+		MicroAmpereHours ReportedFullCapacity{};
+		MicroAmpereHours NominalFullCapacity{};
+		uint16_t CycleCount = 0;
 
-		constexpr static size_t SerializedSize = 24;
+		constexpr static size_t SerializedSize = 30;
 
 		constexpr std::array<uint8_t, SerializedSize> Serialize() const
 		{
@@ -255,6 +258,9 @@ namespace PiSubmarine::Max17261
 			writeU16(18, TemperatureCompensationCoefficientRaw);
 			writeU16(20, CapacityDeltaAccumulator.Raw);
 			writeU16(22, PowerDeltaAccumulator.Raw);
+			writeU16(24, ReportedFullCapacity.ToRaw());
+			writeU16(26, NominalFullCapacity.ToRaw());
+			writeU16(28, CycleCount);
 			return data;
 		}
 
@@ -279,6 +285,9 @@ namespace PiSubmarine::Max17261
 			result.TemperatureCompensationCoefficientRaw = readU16(18);
 			result.CapacityDeltaAccumulator.Raw = readU16(20);
 			result.PowerDeltaAccumulator.Raw = readU16(22);
+			result.ReportedFullCapacity = MicroAmpereHours::FromRaw(readU16(24));
+			result.NominalFullCapacity = MicroAmpereHours::FromRaw(readU16(26));
+			result.CycleCount = readU16(28);
 			return result;
 		}
 	};
